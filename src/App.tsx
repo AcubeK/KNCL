@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import {
   Home, Users, ClipboardList, HelpCircle, BarChart3, Settings, FlaskConical,
   Search, Download, Plus, Bell, ChevronRight, ChevronDown, X, Clock,
@@ -6,8 +6,10 @@ import {
   Eye, Pencil, Trash2, Gauge, Wrench, ShieldCheck, Building2, ListFilter,
   CalendarDays, ArrowUpRight, UserCircle2, Lock, Mail, QrCode, Printer,
   FileCheck2, PenLine, PackageCheck, Split, Paperclip, ScanLine, TrendingUp,
-  ClipboardCheck, ArrowRightLeft
+  ClipboardCheck, ArrowRightLeft,  Info,
+  RotateCcw,ImagePlus, Layers, SendHorizontal
 } from "lucide-react";
+
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, PieChart, Pie, Cell
@@ -326,21 +328,25 @@ const BATCHES = [
   { sample: "SAM-202608-001", kyHieu: "260805.01/02", order: "DH-2608-001", indicator: "pH", method: "TCVN 6492:2011", lodloq: "-", unit: "-", limit: "5.5 - 9", qcvn: "QCVN 40:2011/BTNMT", tech: "Acc KNV 2", thietBi: "Máy đo pH cầm tay", status: "APPROVED_COMPLETED", result: "7.2", note: "" },
   { sample: "SAM-202608-003", kyHieu: "260801.01/01", order: "DH-2608-003", indicator: "Tổng Nitơ", method: "TCVN 6638:2000", lodloq: "0.5 mg/L", unit: "mg/L", limit: "≤ 40", qcvn: "QCVN 19:2009/BTNMT", tech: "Acc Trưởng phòng", thietBi: "Máy phân tích N - N-01", status: "APPROVED_COMPLETED", result: "22", note: "" },
   { sample: "SAM-202608-006", kyHieu: "260730.01/01", order: "DH-2608-006", indicator: "Kim loại nặng (Pb)", method: "SMEWW 3111B", lodloq: "0.01 mg/L", unit: "mg/L", limit: "≤ 0.5", qcvn: "QCVN 05:2023/BTNMT", tech: "Acc KNV 1", thietBi: "Máy AAS", status: "REJECTED", result: "0.61", note: "Vượt ngưỡng, đề nghị làm lại" },
-  { sample: "SAM-202608-006", kyHieu: "260730.01/02", order: "DH-2608-006", indicator: "Coliform tổng số", method: "TCVN 6187-2:1996", lodloq: "3 MPN/100mL", unit: "MPN/100mL", limit: "≤ 5000", qcvn: "QCVN 08:2023/BTNMT", tech: "Acc KNV 2", thietBi: "Tủ ủ vi sinh", status: "ASSIGNED", result: "", note: "" },
+  { sample: "SAM-202608-006", kyHieu: "260730.01/02", order: "DH-2608-006", indicator: "Coliform tổng số", method: "TCVN 6187-2:1996", lodloq: "3 MPN/100mL", unit: "MPN/100mL", limit: "≤ 5000", qcvn: "QCVN 08:2023/BTNMT", tech: "Acc KNV 2", thietBi: "Tủ ủ vi sinh", status: "PENDING_APPROVAL", result: "1800", note: "Đạt" },
   { sample: "SAM-202608-008", kyHieu: "260810.01/01", order: "DH-2608-008", indicator: "COD", method: "SMEWW 5220C", lodloq: "4 mg/L", unit: "mg/L", limit: "≤ 150", qcvn: "QCVN 08:2023/BTNMT", tech: "Acc KNV 3", thietBi: "Máy đo COD - COD-01", status: "ASSIGNED", result: "", note: "" },
 ];
 const BATCH_STATUS = {
   ASSIGNED: { label: "Đã phân công", bg: "var(--blue-soft)", fg: "var(--blue)" },
   TESTING: { label: "Đang thử nghiệm", bg: "var(--amber-soft)", fg: "var(--amber)" },
-  PENDING_APPROVAL: { label: "Chờ duyệt", bg: "var(--violet-soft)", fg: "var(--violet)" },
+  PENDING_APPROVAL: { label: "KNV đã nộp — chờ tổng hợp", bg: "var(--violet-soft)", fg: "var(--violet)" },
+  PENDING_HEAD_APPROVAL: { label: "Đã tổng hợp — chờ Trưởng phòng duyệt", bg: "var(--blue-soft)", fg: "var(--blue)" },
   REJECTED: { label: "Yêu cầu làm lại", bg: "var(--red-soft)", fg: "var(--red)" },
   APPROVED_COMPLETED: { label: "Đã duyệt", bg: "var(--primary-soft)", fg: "var(--primary-dark)" },
 };
+// Thứ tự luồng xử lý kết quả — dùng để vẽ tiến trình trực quan
+const RESULT_FLOW = ["ASSIGNED", "TESTING", "PENDING_APPROVAL", "PENDING_HEAD_APPROVAL", "APPROVED_COMPLETED"];
+const RESULT_FLOW_LABELS = ["Phân công", "Thử nghiệm", "KNV nộp KQ", "Quản lý tổng hợp", "Trưởng phòng duyệt"];
 const TECHNICIANS = ["Acc KNV 1", "Acc KNV 2", "Acc KNV 3", "Acc Trưởng phòng"];
 const ROLES = [
   { key: "A", label: "Kiểm nghiệm viên", name: "Acc KNV 1", icon: FlaskConical },
-  { key: "B", label: "Quản lý / Kinh doanh", name: "Acc Admin", icon: Users },
-  { key: "C", label: "Lãnh đạo / Duyệt", name: "Acc Trưởng phòng", icon: ShieldCheck },
+  { key: "B", label: "Quản lý", name: "Acc Quản lý", icon: Users },
+  { key: "C", label: "Trưởng phòng / Duyệt", name: "Acc Trưởng phòng", icon: ShieldCheck },
 ];
 const EQUIPMENT_LIST = ["Máy đo COD - COD-01", "Tủ ấm BOD - BOD-02", "Máy đo pH cầm tay", "Máy phân tích N - N-01", "Máy AAS", "Tủ ủ vi sinh"];
 
@@ -465,6 +471,43 @@ const TECH_PRODUCTIVITY = TECHNICIANS.map((t) => ({
   giao: BATCHES.filter((b) => b.tech === t).length + 6,
   hoanThanh: BATCHES.filter((b) => b.tech === t && b.status === "APPROVED_COMPLETED").length + 5,
 }));
+const SAMPLE_TEST_STATUS = ["Chưa kiểm nghiệm", "Đang kiểm nghiệm", "Đã kiểm nghiệm", "Cần xem xét lại"];
+const testStatusStyle = {
+  "Chưa kiểm nghiệm": { bg: "var(--gray-soft)", fg: "#5B6659" },
+  "Đang kiểm nghiệm": { bg: "var(--amber-soft)", fg: "var(--amber)" },
+  "Đã kiểm nghiệm": { bg: "var(--primary-soft)", fg: "var(--primary-dark)" },
+  "Cần xem xét lại": { bg: "var(--red-soft)", fg: "var(--red)" },
+};
+
+/* ============================================================
+   PHÂN QUYỀN — nguồn dữ liệu duy nhất cho mọi kiểm tra truy cập
+   A = Kiểm nghiệm viên · B = Quản lý (mọi thứ trừ khâu Duyệt cuối)
+   C = Trưởng phòng (toàn quyền, kể cả Duyệt)
+   ============================================================ */
+const PAGE_ROLES = {
+  banLamViec: ["A", "B", "C"],
+  tongQuanLab: ["A", "B", "C"],
+  khachHang: ["A", "B", "C"],
+  baoGia: ["A", "B", "C"],
+  hopDong: ["A", "B", "C"],
+  TaoPhieuYCKN: ["B", "C"],
+  yeuCauTN: ["B", "C"],
+  phanCong: ["B", "C"],
+  meThuNghiem: ["B", "C"],
+  nhapKQ: ["A", "B", "C"],
+  tongHopPhieu: ["B", "C"],
+  duyetPhieu: ["C"],
+  ketQuaThuNghiem: ["A", "B", "C"],
+  tkKinhDoanh: ["B", "C"],
+  tkNangSuat: ["B", "C"],
+  tkKyThuat: ["B", "C"],
+  danhMucA: ["A", "B", "C"],
+  nhaThauPhu: ["A", "B", "C"],
+  thietBi: ["B", "C"],
+  nguoiDung: ["B", "C"],
+};
+const canAccess = (page, role) => PAGE_ROLES[page]?.includes(role);
+const firstAllowedPage = (role) => Object.keys(PAGE_ROLES).find((p) => canAccess(p, role)) || "banLamViec";
 
 /* ============================================================
    SMALL COMPONENTS
@@ -527,6 +570,37 @@ const Modal = ({ title, onClose, children, width = 460 }) => (
   </div>
 );
 
+/* Thanh tiến trình luồng xử lý kết quả — hiển thị dùng chung ở nhiều trang
+   để người dùng luôn thấy rõ đang ở bước nào trong: Thử nghiệm → KNV nộp →
+   Quản lý tổng hợp → Trưởng phòng duyệt */
+const ResultFlowTrack = ({ currentStatus }) => {
+  const idx = RESULT_FLOW.indexOf(currentStatus);
+  const isRejected = currentStatus === "REJECTED";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      {RESULT_FLOW_LABELS.map((label, i) => {
+        const active = !isRejected && i <= idx;
+        const isCurrent = !isRejected && i === idx;
+        return (
+          <React.Fragment key={label}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <div style={{
+                width: 7, height: 7, borderRadius: 99,
+                background: isRejected ? "var(--red)" : active ? "var(--primary)" : "var(--line)",
+                flexShrink: 0,
+              }} />
+              <span style={{ fontSize: 11, fontWeight: isCurrent ? 700 : 500, color: isRejected ? "var(--red)" : active ? "var(--ink)" : "var(--ink-faint)", whiteSpace: "nowrap" }}>
+                {label}
+              </span>
+            </div>
+            {i < RESULT_FLOW_LABELS.length - 1 && <div style={{ width: 14, height: 1, background: "var(--line)" }} />}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+};
+
 /* ============================================================
    LOGIN
    ============================================================ */
@@ -547,7 +621,7 @@ const LoginScreen = ({ onLogin }) => {
               <span className="disp" style={{ fontWeight: 700, fontSize: 17, letterSpacing: ".02em" }}>LabTrack</span>
             </div>
             <p style={{ marginTop: 26, fontSize: 13, lineHeight: 1.7, color: "#CFE6DE" }}>
-              Hệ thống quản lý phòng thí nghiệm — từ báo giá, tiếp nhận mẫu, phân công thử nghiệm đến duyệt & xuất phiếu kết quả.
+              Hệ thống quản lý phòng thí nghiệm — từ báo giá, tiếp nhận mẫu, phân công thử nghiệm, tổng hợp đến duyệt & xuất phiếu kết quả.
             </p>
           </div>
           <div className="mono" style={{ fontSize: 11, color: "#8FC1B0", letterSpacing: ".05em" }}>
@@ -573,7 +647,7 @@ const LoginScreen = ({ onLogin }) => {
           </div>
 
           <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-soft)" }}>Vai trò demo (RBAC)</label>
-          <div style={{ display: "flex", gap: 8, margin: "6px 0 22px" }}>
+          <div style={{ display: "flex", gap: 8, margin: "6px 0 8px" }}>
             {ROLES.map((r) => (
               <button key={r.key} onClick={() => setSelectedRole(r.key)} style={{
                 flex: 1, padding: "8px 6px", borderRadius: 8, cursor: "pointer",
@@ -585,6 +659,11 @@ const LoginScreen = ({ onLogin }) => {
               </button>
             ))}
           </div>
+          <p style={{ margin: "0 0 18px", fontSize: 11, color: "var(--ink-faint)" }}>
+            {selectedRole === "A" && "Xem & nhập kết quả cho công việc được giao."}
+            {selectedRole === "B" && "Toàn quyền vận hành — trừ khâu Duyệt cuối cùng."}
+            {selectedRole === "C" && "Toàn quyền, bao gồm Duyệt & ký số phiếu kết quả."}
+          </p>
 
           <button className="lims-btn lims-btn-primary" style={{ width: "100%", justifyContent: "center", padding: "10px 0" }} onClick={() => onLogin(selectedRole)}>
             Đăng nhập <ChevronRight size={14} />
@@ -609,17 +688,16 @@ const NAV_GROUPS = [
     ],
   },
   {
-    key: "kinhDoanh", label: "2. Kinh doanh & Đơn hàng", icon: ClipboardList,
+    key: "kinhDoanh", label: "2. Đơn hàng", icon: ClipboardList, 
     children: [
       { key: "khachHang", label: "Danh sách Khách hàng" },
-      { key: "baoGia", label: "Báo giá → Đơn hàng" },
-      { key: "hopDong", label: "Hợp đồng & Tần suất" },
+      { key: "baoGia", label: "Báo giá" },
+      { key: "TaoPhieuYCKN", label: "Tạo phiếu"},
     ],
   },
   {
     key: "tiepNhan", label: "3. Tiếp nhận & Phân công", icon: PackageCheck,
     children: [
-      { key: "maHoaMau", label: "Tiếp nhận và Tạo phiếu" },
       { key: "yeuCauTN", label: "Yêu cầu thử nghiệm" },
       { key: "phanCong", label: "Giao việc" },
       { key: "meThuNghiem", label: "Quản lý Mẻ thử nghiệm" },
@@ -632,8 +710,9 @@ const NAV_GROUPS = [
     ],
   },
   {
-    key: "duyet", label: "5. Duyệt & Báo cáo kết quả", icon: FileCheck2,
+    key: "duyet", label: "5. Tổng hợp, Duyệt & Báo cáo", icon: FileCheck2,
     children: [
+      { key: "tongHopPhieu", label: "Tổng hợp & Gửi duyệt" },
       { key: "duyetPhieu", label: "Duyệt phiếu kết quả" },
       { key: "ketQuaThuNghiem", label: "Kết quả thử nghiệm" },
     ],
@@ -641,9 +720,10 @@ const NAV_GROUPS = [
   {
     key: "baoCao", label: "6. Báo cáo & Thống kê", icon: BarChart3,
     children: [
-      { key: "tkKinhDoanh", label: "Thống kê Kinh doanh & Khách hàng" },
+      { key: "tkKinhDoanh", label: "Thống kê Đơn hàng & Khách hàng" },
       { key: "tkNangSuat", label: "Thống kê Năng suất & Tiến độ Lab" },
       { key: "tkKyThuat", label: "Thống kê Kỹ thuật" },
+      { key: "hopDong", label: "Hợp đồng & Tần suất" },
     ],
   },
   {
@@ -658,19 +738,19 @@ const NAV_GROUPS = [
 ];
 const findGroupByChild = (childKey) => NAV_GROUPS.find((g) => g.children.some((c) => c.key === childKey));
 
+/* Lọc nav theo phân quyền — mỗi mục / nhóm chỉ hiện nếu vai trò hiện tại có quyền,
+   dùng chung một PAGE_ROLES nên không còn rẽ nhánh rải rác theo role như trước */
+const visibleNavForRole = (role) =>
+  NAV_GROUPS
+    .map((g) => ({ ...g, children: g.children.filter((c) => canAccess(c.key, role)) }))
+    .filter((g) => g.children.length > 0);
+
 
 /* ============================================================
    HEADER / TWO-TIER NAV
    ============================================================ */
 const Header = ({ page, setPage, onLogout, role }) => {
-  const visibleGroups = NAV_GROUPS
-    .filter((g) => role !== "A" || ["tongQuan", "kinhDoanh", "banKNV", "heThong"].includes(g.key))
-    .map((g) => ({
-      ...g,
-      children: role === "A" && g.key === "heThong"
-        ? g.children.filter((c) => ["danhMucA", "nhaThauPhu"].includes(c.key))
-        : g.children,
-    }));
+  const visibleGroups = visibleNavForRole(role);
   const activeGroup = findGroupByChild(page) || visibleGroups[0];
   const currentRole = ROLES.find((r) => r.key === role);
   return (
@@ -682,7 +762,7 @@ const Header = ({ page, setPage, onLogout, role }) => {
         </div>
         <nav style={{ display: "flex", gap: 2, flex: 1, overflowX: "auto" }} className="lims-scroll">
           {visibleGroups.map((g) => {
-            const active = activeGroup.key === g.key;
+            const active = activeGroup?.key === g.key;
             return (
               <button
                 key={g.key}
@@ -704,11 +784,12 @@ const Header = ({ page, setPage, onLogout, role }) => {
           <button className="lims-btn-icon" style={{ borderColor: "transparent", color: "#CFE6DE" }} title="Thông báo"><Bell size={16} /></button>
           <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#fff", fontSize: 12.5, fontWeight: 600 }}>
             <UserCircle2 size={20} /> {currentRole.name}
+            <span style={{ fontSize: 10.5, fontWeight: 500, color: "#9FCBBE", border: "1px solid #2A6357", borderRadius: 99, padding: "1px 7px" }}>{currentRole.label}</span>
           </div>
           <button className="lims-btn-icon" style={{ borderColor: "transparent", color: "#CFE6DE" }} onClick={onLogout} title="Đăng xuất"><LogOut size={16} /></button>
         </div>
       </div>
-      {activeGroup.children.length > 1 && (
+      {activeGroup && activeGroup.children.length > 1 && (
         <div style={{ background: "var(--bg)", borderBottom: "1px solid var(--line)" }}>
           <div style={{ maxWidth: 1320, margin: "0 auto", display: "flex", gap: 4, padding: "0 20px", overflowX: "auto" }} className="lims-scroll">
             {activeGroup.children.map((c) => (
@@ -972,10 +1053,11 @@ const TongQuanLabPage = () => (
   <>
     <PageHeader title="Tổng quan Phòng Lab" subtitle="Góc nhìn quản lý — tải trọng công việc và điểm nghẽn hiện tại" />
     <PageShell>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
         {[
           { label: "Đơn hàng đang xử lý", value: ORDERS.filter((o) => !["Hoàn tất", "Hủy"].includes(o.status)).length, color: "var(--primary-dark)", bg: "var(--primary-soft)" },
-          { label: "Mẻ chờ duyệt", value: BATCHES.filter((b) => b.status === "PENDING_APPROVAL").length, color: "var(--violet)", bg: "var(--violet-soft)" },
+          { label: "Chờ Quản lý tổng hợp", value: BATCHES.filter((b) => b.status === "PENDING_APPROVAL").length, color: "var(--violet)", bg: "var(--violet-soft)" },
+          { label: "Chờ Trưởng phòng duyệt", value: BATCHES.filter((b) => b.status === "PENDING_HEAD_APPROVAL").length, color: "var(--blue)", bg: "var(--blue-soft)" },
           { label: "Quá hạn (đơn + thiết bị)", value: OVERDUE_ORDERS.length + EQUIPMENT_OVERDUE.length, color: "var(--red)", bg: "var(--red-soft)" },
           { label: "Yêu cầu làm lại", value: BATCHES.filter((b) => b.status === "REJECTED").length, color: "var(--amber)", bg: "var(--amber-soft)" },
         ].map((k) => (
@@ -1026,7 +1108,7 @@ const TongQuanLabPage = () => (
 );
 
 /* ============================================================
-   2. KINH DOANH & ĐƠN HÀNG — Khách hàng
+   2. ĐƠN HÀNG — Khách hàng
    ============================================================ */
 // Gắn Phiếu YCKN vào đúng 1 hợp đồng cụ thể (demo — 3 hợp đồng có phiếu thực tế)
 const CONTRACT_YCKN = {
@@ -1034,6 +1116,151 @@ const CONTRACT_YCKN = {
   "HD-2602-01": ["DH-2608-003"],
   "HD-2607-01": ["DH-2608-006"],
 };
+
+// ------------------------------------------------------------
+// HIERARCHY HELPERS — dán ngay sau `const CONTRACT_YCKN = {...}`
+// ------------------------------------------------------------
+ 
+// Dựng cây Khách hàng -> Hợp đồng -> Phiếu YCKN -> Phiếu con (Mục)
+// Chỉ tính các hợp đồng/YCKN đã thật sự có dữ liệu (TEST_REQUESTS)
+// để tránh hiện option rỗng trong dropdown.
+const useFilterHierarchy = () =>
+  useMemo(() => {
+    return CUSTOMERS.map((cust) => {
+      const contracts = CONTRACTS.filter((k) => k.customerId === cust.id)
+        .map((k) => {
+          const orderNos = (CONTRACT_YCKN[k.id] || []).filter((no) => TEST_REQUESTS[no]);
+          const yckns = orderNos.map((no) => {
+            const req = TEST_REQUESTS[no];
+            const childSlips = req.groups.map((g, i) => ({
+              code: `${YCKN_CODE[no]}-${i + 1}`,
+              label: g.title || g.type,
+              type: g.type,
+            }));
+            return {
+              orderNo: no,
+              code: YCKN_CODE[no],
+              name: ORDERS.find((o) => o.no === no)?.name || no,
+              childSlips,
+            };
+          });
+          return { ...k, yckns };
+        })
+        .filter((k) => k.yckns.length > 0);
+      return { ...cust, contracts };
+    }).filter((c) => c.contracts.length > 0);
+  }, []);
+ 
+// Xác định 1 batch (dòng chỉ tiêu) thuộc Phiếu con nào, dựa vào việc
+// mẫu con của nó (kyHieu) nằm trong Mục nào của TEST_REQUESTS.
+const getBatchChildSlip = (batch) => {
+  const req = TEST_REQUESTS[batch.order];
+  if (!req) return null;
+  const flat = flattenOrderSamples(batch.order);
+  const sampleRow = flat.find((s) => s.maSoMau === batch.kyHieu);
+  if (!sampleRow) return null;
+  const groupIndex = req.groups.findIndex((g) => (g.title || g.type) === sampleRow.groupTitle);
+  if (groupIndex === -1) return null;
+  return `${YCKN_CODE[batch.order]}-${groupIndex + 1}`;
+};
+ 
+// Predicate dùng để lọc mảng batches theo lựa chọn hiện tại của
+// CascadeFilter. Rỗng ("") ở bất kỳ cấp nào = không lọc cấp đó.
+const batchMatchesSelection = (batch, sel) => {
+  if (!sel) return true;
+ 
+  if (sel.orderNo) {
+    if (batch.order !== sel.orderNo) return false;
+  } else if (sel.contractId) {
+    const orderNos = CONTRACT_YCKN[sel.contractId] || [];
+    if (!orderNos.includes(batch.order)) return false;
+  } else if (sel.customerId) {
+    const custName = CUSTOMERS.find((c) => c.id === sel.customerId)?.name;
+    if (TEST_REQUESTS[batch.order]?.kh !== custName) return false;
+  }
+ 
+  if (sel.childSlipCode && getBatchChildSlip(batch) !== sel.childSlipCode) return false;
+ 
+  return true;
+};
+ 
+const EMPTY_FILTER = { customerId: "", contractId: "", orderNo: "", childSlipCode: "" };
+ 
+
+// ------------------------------------------------------------
+// COMPONENT — CascadeFilter (dùng chung cho 3 trang)
+// ------------------------------------------------------------
+const CascadeFilter = ({ value, onChange }) => {
+  const hierarchy = useFilterHierarchy();
+  const selectedCustomer = hierarchy.find((c) => c.id === value.customerId);
+  const selectedContract = selectedCustomer?.contracts.find((k) => k.id === value.contractId);
+  const selectedYckn = selectedContract?.yckns.find((y) => y.orderNo === value.orderNo);
+ 
+  const set = (patch) => onChange({ ...value, ...patch });
+  const hasFilter = value.customerId || value.contractId || value.orderNo || value.childSlipCode;
+ 
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+      <select
+        className="lims-input"
+        style={{ minWidth: 200 }}
+        value={value.customerId}
+        onChange={(e) => set({ customerId: e.target.value, contractId: "", orderNo: "", childSlipCode: "" })}
+      >
+        <option value="">Tất cả khách hàng</option>
+        {hierarchy.map((c) => (
+          <option key={c.id} value={c.id}>{c.name}</option>
+        ))}
+      </select>
+ 
+      <select
+        className="lims-input"
+        style={{ minWidth: 200 }}
+        value={value.contractId}
+        disabled={!value.customerId}
+        onChange={(e) => set({ contractId: e.target.value, orderNo: "", childSlipCode: "" })}
+      >
+        <option value="">Tất cả hợp đồng</option>
+        {(selectedCustomer?.contracts || []).map((k) => (
+          <option key={k.id} value={k.id}>{k.id} — {k.name}</option>
+        ))}
+      </select>
+ 
+      <select
+        className="lims-input"
+        style={{ minWidth: 220 }}
+        value={value.orderNo}
+        disabled={!value.contractId}
+        onChange={(e) => set({ orderNo: e.target.value, childSlipCode: "" })}
+      >
+        <option value="">Tất cả Phiếu YCKN</option>
+        {(selectedContract?.yckns || []).map((y) => (
+          <option key={y.orderNo} value={y.orderNo}>{y.code} — {y.name}</option>
+        ))}
+      </select>
+ 
+      <select
+        className="lims-input"
+        style={{ minWidth: 200 }}
+        value={value.childSlipCode}
+        disabled={!value.orderNo}
+        onChange={(e) => set({ childSlipCode: e.target.value })}
+      >
+        <option value="">Tất cả phiếu con</option>
+        {(selectedYckn?.childSlips || []).map((s) => (
+          <option key={s.code} value={s.code}>{s.code} — {s.label}</option>
+        ))}
+      </select>
+ 
+      {hasFilter && (
+        <button className="lims-btn lims-btn-ghost" onClick={() => onChange(EMPTY_FILTER)}>
+          <RotateCcw size={13} /> Xóa lọc
+        </button>
+      )}
+    </div>
+  );
+};
+ 
 
 const emptyCustomerForm = { name: "", address: "", mst: "", contact: "", chucVu: "", phone: "", fax: "", email: "", freq: "Hàng quý" };
 
@@ -1117,75 +1344,171 @@ const KhachHangPage = ({ role }) => {
   const [customers, setCustomers] = useState(CUSTOMERS);
   const [search, setSearch] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Bộ lọc nâng cao
+  const [locationFilter, setLocationFilter] = useState("");
   const [freqFilter, setFreqFilter] = useState("");
+  const [codeFilter, setCodeFilter] = useState("");
+
   const [expandedCustomer, setExpandedCustomer] = useState(null);
   const [expandedContract, setExpandedContract] = useState(null);
-  const [formModal, setFormModal] = useState(null); // { mode: "add"|"edit", data }
+  const [formModal, setFormModal] = useState(null);
   const [viewing, setViewing] = useState(null);
 
-  const filtered = useMemo(() => customers.filter((c) =>
-    (c.name + c.id + c.contact + c.mst).toLowerCase().includes(search.toLowerCase()) &&
-    (!freqFilter || c.freq === freqFilter)
-  ), [customers, search, freqFilter]);
+  // Map dữ liệu để tra cứu O(1)
+  const ordersMap = useMemo(() => new Map(ORDERS.map((o) => [o.no, o.name])), []);
+  const contractsByCustId = useMemo(() => {
+    const map = new Map();
+    CONTRACTS.forEach((k) => map.get(k.customerId)?.push(k) || map.set(k.customerId, [k]));
+    return map;
+  }, []);
 
-  const contractsFor = (customerId) => CONTRACTS.filter((k) => k.customerId === customerId);
+  // Danh sách Tỉnh/Thành & Tần suất
+  const locationOptions = useMemo(() => {
+    const provinces = customers.map((c) => c.address?.split(",").pop()?.trim()).filter(Boolean);
+    return [...new Set(provinces)];
+  }, [customers]);
 
-  const saveCustomer = (form) => {
-    if (formModal.mode === "edit") {
-      setCustomers((cs) => cs.map((c) => c.id === formModal.data.id ? { ...c, ...form } : c));
-    } else {
-      const nextId = `KH-${String(customers.length + 1).padStart(4, "0")}`;
-      setCustomers((cs) => [...cs, { id: nextId, ...form }]);
-    }
+  const freqOptions = useMemo(() => [...new Set(CONTRACTS.map((k) => k.freq).filter(Boolean))], []);
+
+  const handleResetFilter = useCallback(() => {
+    setSearch("");
+    setLocationFilter("");
+    setFreqFilter("");
+    setCodeFilter("");
+  }, []);
+
+  // Logic lọc dữ liệu tối ưu
+  const filtered = useMemo(() => {
+    const s = search.toLowerCase().trim();
+    const loc = locationFilter.toLowerCase().trim();
+    const code = codeFilter.toLowerCase().trim();
+
+    return customers.filter((c) => {
+      const matchSearch = !s || [c.name, c.id, c.contact, c.phone, c.address, c.mst].some((v) => v?.toLowerCase().includes(s));
+      if (!matchSearch) return false;
+
+      const matchLoc = !loc || c.address?.toLowerCase().includes(loc);
+      if (!matchLoc) return false;
+
+      if (!freqFilter && !code) return true;
+
+      const custContracts = contractsByCustId.get(c.id) || [];
+      return custContracts.some((k) => {
+        if (freqFilter && k.freq !== freqFilter) return false;
+        if (!code) return true;
+
+        const ycknList = CONTRACT_YCKN[k.id] || [];
+        return (
+          k.id?.toLowerCase().includes(code) ||
+          k.name?.toLowerCase().includes(code) ||
+          ycknList.some((no) =>
+            [YCKN_CODE[no], no, ordersMap.get(no)].some((v) => v?.toLowerCase().includes(code))
+          )
+        );
+      });
+    });
+  }, [customers, search, locationFilter, freqFilter, codeFilter, contractsByCustId, ordersMap]);
+
+  const saveCustomer = useCallback((form) => {
+    setCustomers((cs) =>
+      formModal?.mode === "edit"
+        ? cs.map((c) => (c.id === formModal.data.id ? { ...c, ...form } : c))
+        : [...cs, { id: `KH-${String(cs.length + 1).padStart(4, "0")}`, ...form }]
+    );
     setFormModal(null);
-  };
-  const deleteCustomer = (id) => setCustomers((cs) => cs.filter((c) => c.id !== id));
+  }, [formModal]);
+
+  const deleteCustomer = useCallback((id) => setCustomers((cs) => cs.filter((c) => c.id !== id)), []);
 
   return (
     <>
       <PageHeader title="Danh sách Khách hàng" subtitle="Hồ sơ khách hàng, hợp đồng và Phiếu YCKN đi kèm" />
       <PageShell>
         <SectionCard title="Danh sách khách hàng" icon={Users} style={{ padding: 0 }}>
+          {/* Toolbar chính */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", padding: "14px 16px", borderBottom: "1px solid var(--line)" }}>
             <div style={{ position: "relative", flex: "1 1 220px", maxWidth: 320 }}>
               <Search size={14} color="var(--ink-faint)" style={{ position: "absolute", left: 10, top: 9 }} />
-              <input className="lims-input" style={{ width: "100%", paddingLeft: 30 }} placeholder="Tìm theo tên, mã KH, MST, người liên hệ..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <input
+                className="lims-input"
+                style={{ width: "100%", paddingLeft: 30 }}
+                placeholder="Tìm tên, mã KH, MST, người liên hệ..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
             <button className="lims-btn lims-btn-ghost" onClick={() => setShowAdvanced((s) => !s)}>
               <ListFilter size={14} /> {showAdvanced ? "Ẩn bộ lọc" : "Bộ lọc nâng cao"}
             </button>
             <div style={{ flex: 1 }} />
             <button className="lims-btn lims-btn-ghost"><Download size={14} /> Xuất Excel</button>
-            
-            {(role === "B" || role === "A") && (
+            {(role === "B" || role === "C") && (
               <button className="lims-btn lims-btn-primary" onClick={() => setFormModal({ mode: "add" })}>
                 <Plus size={14} /> Thêm khách hàng
               </button>
             )}
           </div>
+
+          {/* Bộ lọc nâng cao (Đã bỏ input search lặp) */}
           {showAdvanced && (
-            <div style={{ display: "flex", gap: 10, padding: "0 16px 14px", flexWrap: "wrap" }}>
-              <select className="lims-input" value={freqFilter} onChange={(e) => setFreqFilter(e.target.value)}>
-                <option value="">Tất cả tần suất</option>
-                {[...new Set(customers.map((c) => c.freq))].map((f) => <option key={f}>{f}</option>)}
-              </select>
-              <span style={{ fontSize: 12, color: "var(--ink-faint)", alignSelf: "center" }}>Nhấp vào 1 dòng khách hàng để xem Hợp đồng, nhấp vào Hợp đồng để xem Phiếu YCKN.</span>
+            <div style={{ background: "var(--surface-alt, #F8FAFC)", padding: 16, borderRadius: 8, border: "1px solid var(--line)", margin: "12px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>ĐỊA ĐIỂM / TỈNH THÀNH</label>
+                  <select className="lims-input" style={{ width: "100%", height: 36, fontSize: 13 }} value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
+                    <option value="">Tất cả địa điểm</option>
+                    {locationOptions.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>TẦN SUẤT HỢP ĐỒNG</label>
+                  <select className="lims-input" style={{ width: "100%", height: 36, fontSize: 13 }} value={freqFilter} onChange={(e) => setFreqFilter(e.target.value)}>
+                    <option value="">Tất cả tần suất</option>
+                    {freqOptions.map((f) => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>MÃ HỢP ĐỒNG / YCKN</label>
+                  <input className="lims-input" style={{ width: "100%", height: 36, fontSize: 13 }} placeholder="Mã HD-..., Mã YCKN..." value={codeFilter} onChange={(e) => setCodeFilter(e.target.value)} />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px dashed var(--line)", paddingTop: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--ink-soft)" }}>
+                  <Info size={14} color="var(--primary)" />
+                  <span>Bấm vào <strong>Khách hàng</strong> để xem Hợp đồng • Bấm <strong>Hợp đồng</strong> xem YCKN</span>
+                </div>
+                <button className="lims-btn lims-btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }} onClick={handleResetFilter}>
+                  <RotateCcw size={12} /> Xóa bộ lọc
+                </button>
+              </div>
             </div>
           )}
+
+          {/* Bảng Dữ Liệu */}
           <div className="lims-scroll" style={{ overflowX: "auto" }}>
             <table className="lims-table">
               <thead>
                 <tr>
-                  <th></th><th>STT</th><th>Mã KH</th><th>Tên khách hàng</th><th>Người đại diện</th><th>SĐT</th><th>Địa điểm</th><th>Hợp đồng</th><th></th>
+                  <th style={{ width: 30 }}></th>
+                  <th style={{ width: 50 }}>STT</th>
+                  <th style={{ width: 100 }}>Mã KH</th>
+                  <th>Tên khách hàng</th>
+                  <th>Người đại diện</th>
+                  <th>SĐT</th>
+                  <th>Địa điểm</th>
+                  <th style={{ textAlign: "center" }}>Hợp đồng</th>
+                  <th style={{ width: 90, textAlign: "right" }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((c, i) => {
-                  const custContracts = contractsFor(c.id);
+                  const custContracts = contractsByCustId.get(c.id) || [];
                   const isOpen = expandedCustomer === c.id;
                   return (
                     <React.Fragment key={c.id}>
-                      <tr style={{ cursor: "pointer" }} onClick={() => { setExpandedCustomer(isOpen ? null : c.id); setExpandedContract(null); }}>
+                      <tr style={{ cursor: "pointer", background: isOpen ? "var(--surface-alt)" : "transparent" }} onClick={() => { setExpandedCustomer(isOpen ? null : c.id); setExpandedContract(null); }}>
                         <td>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
                         <td>{i + 1}</td>
                         <td><SpecimenTag>{c.id}</SpecimenTag></td>
@@ -1193,42 +1516,36 @@ const KhachHangPage = ({ role }) => {
                         <td>{c.contact}</td>
                         <td className="mono" style={{ color: "var(--ink-soft)" }}><Phone size={11} style={{ marginRight: 4, verticalAlign: -1 }} />{c.phone}</td>
                         <td style={{ color: "var(--ink-soft)" }}><MapPin size={11} style={{ marginRight: 4, verticalAlign: -1 }} />{c.address}</td>
-                        <td><span className="badge" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}>{custContracts.length} hợp đồng</span></td>
-                        <td onClick={(e) => e.stopPropagation()}>
-                          <RowActions
-                            onView={() => setViewing(c)}
-                            onEdit={role !== "C" ? () => setFormModal({ mode: "edit", data: c }) : undefined}
-                            onDelete={role === "B" ? () => deleteCustomer(c.id) : undefined}
-                          />
+                        <td style={{ textAlign: "center" }}><span className="badge" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}>{custContracts.length} hợp đồng</span></td>
+                        <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
+                          <RowActions onView={() => setViewing(c)} onEdit={role !== "A" ? () => setFormModal({ mode: "edit", data: c }) : undefined} onDelete={role === "B" || role === "C" ? () => deleteCustomer(c.id) : undefined} />
                         </td>
                       </tr>
+
                       {isOpen && (
                         <tr>
                           <td colSpan={9} style={{ background: "var(--surface-alt)", padding: 0 }}>
                             <div style={{ padding: "10px 16px 10px 40px" }}>
-                              {custContracts.length === 0 && <div style={{ fontSize: 12, color: "var(--ink-faint)", padding: 8 }}>Khách hàng chưa có hợp đồng nào.</div>}
+                              {!custContracts.length && <div style={{ fontSize: 12, color: "var(--ink-faint)", padding: 8 }}>Khách hàng chưa có hợp đồng nào.</div>}
                               {custContracts.map((k) => {
                                 const yckn = CONTRACT_YCKN[k.id] || [];
                                 const contractOpen = expandedContract === k.id;
                                 return (
                                   <div key={k.id} style={{ marginBottom: 8 }}>
-                                    <div
-                                      onClick={() => setExpandedContract(contractOpen ? null : k.id)}
-                                      style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 10px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 8 }}
-                                    >
+                                    <div onClick={() => setExpandedContract(contractOpen ? null : k.id)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 12px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 8 }}>
                                       {contractOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                                       <SpecimenTag>{k.id}</SpecimenTag>
                                       <span style={{ fontSize: 12.5, fontWeight: 600 }}>{k.name}</span>
                                       <span style={{ fontSize: 11.5, color: "var(--ink-faint)", marginLeft: "auto" }}>Ký {k.signed} · {k.freq} · {k.value}</span>
                                     </div>
                                     {contractOpen && (
-                                      <div style={{ padding: "8px 8px 4px 24px" }}>
-                                        {yckn.length === 0 && <div style={{ fontSize: 12, color: "var(--ink-faint)" }}>Chưa có Phiếu YCKN nào cho hợp đồng này.</div>}
+                                      <div style={{ padding: "8px 8px 4px 28px" }}>
+                                        {!yckn.length && <div style={{ fontSize: 12, color: "var(--ink-faint)" }}>Chưa có Phiếu YCKN nào cho hợp đồng này.</div>}
                                         {yckn.map((no) => (
                                           <div key={no} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, padding: "5px 0" }}>
                                             <FileText size={12} color="var(--primary)" />
                                             <SpecimenTag>{YCKN_CODE[no]}</SpecimenTag>
-                                            <span style={{ color: "var(--ink-soft)" }}>{ORDERS.find((o) => o.no === no)?.name} — {no}</span>
+                                            <span style={{ color: "var(--ink-soft)" }}>{ordersMap.get(no)} — {no}</span>
                                           </div>
                                         ))}
                                       </div>
@@ -1249,22 +1566,16 @@ const KhachHangPage = ({ role }) => {
         </SectionCard>
       </PageShell>
 
-      {formModal && (
-        <CustomerFormModal
-          initial={formModal.mode === "edit" ? formModal.data : null}
-          onClose={() => setFormModal(null)}
-          onSave={saveCustomer}
-        />
-      )}
+      {formModal && <CustomerFormModal initial={formModal.mode === "edit" ? formModal.data : null} onClose={() => setFormModal(null)} onSave={saveCustomer} />}
       {viewing && <CustomerDetailModal c={viewing} onClose={() => setViewing(null)} />}
     </>
   );
-};
 
-/* ============================================================
-   2. KINH DOANH & ĐƠN HÀNG — Báo giá → Đơn hàng
+};
+  /* ============================================================
+   2. ĐƠN HÀNG — Báo giá
    ============================================================ */
-const QUOTER_NAME = "Acc Admin";
+const QUOTER_NAME = "Acc Quản lý";
 
 const quoteItemsWithData = (items) => items.map((it) => ({ ...it, ind: INDICATORS.find((i) => i.code === it.code) }));
 const quoteTotal = (items) => quoteItemsWithData(items).reduce((sum, it) => sum + (it.ind ? it.ind.price * it.qty : 0), 0);
@@ -1393,6 +1704,8 @@ const BaoGiaPage = ({ role, setPage }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
 
+  const canEdit = role === "B" || role === "C";
+
   // 1. Thao tác Toggle 1 chỉ tiêu
   const toggleIndicator = (sampleType, indicatorCode) => {
     setSelectedIndicators((prev) => {
@@ -1485,7 +1798,7 @@ const BaoGiaPage = ({ role, setPage }) => {
 
   const convertToOrder = (code) => {
     setQuotes((q) => q.map((x) => (x.code === code ? { ...x, status: "Đã chuyển đơn hàng" } : x)));
-    setPage("maHoaMau");
+    setPage("TaoPhieuYCKN");
   };
 
   const filteredQuotes = quotes.filter(
@@ -1497,7 +1810,7 @@ const BaoGiaPage = ({ role, setPage }) => {
   return (
     <>
       <PageHeader
-        title="Báo giá → Đơn hàng"
+        title="Báo giá"
         subtitle="Lập báo giá nhanh: Lọc chỉ tiêu, chọn checklist và xuất đơn hàng"
       />
       <PageShell>
@@ -1901,7 +2214,7 @@ const BaoGiaPage = ({ role, setPage }) => {
             </button>
             <button
               className="lims-btn lims-btn-primary"
-              disabled={role !== "B" || selectedIndicators.length === 0}
+              disabled={!canEdit || selectedIndicators.length === 0}
               onClick={createQuote}
             >
               <Plus size={14} /> Lưu báo giá
@@ -1958,7 +2271,7 @@ const BaoGiaPage = ({ role, setPage }) => {
                   <tr
                     key={q.code}
                     style={{ cursor: q.status === "Đã chuyển đơn hàng" ? "pointer" : "default" }}
-                    onClick={() => q.status === "Đã chuyển đơn hàng" && setPage("maHoaMau")}
+                    onClick={() => q.status === "Đã chuyển đơn hàng" && setPage("TaoPhieuYCKN")}
                   >
                     <td><SpecimenTag>{q.code}</SpecimenTag></td>
                     <td style={{ fontWeight: 600 }}>{q.kh}</td>
@@ -1998,7 +2311,7 @@ const BaoGiaPage = ({ role, setPage }) => {
                         >
                           <Download size={13} /> Xuất Excel
                         </button>
-                        {q.status !== "Đã chuyển đơn hàng" && role === "B" && (
+                        {q.status !== "Đã chuyển đơn hàng" && canEdit && (
                           <button
                             className="lims-btn lims-btn-primary"
                             style={{ padding: "5px 10px" }}
@@ -2024,79 +2337,674 @@ const BaoGiaPage = ({ role, setPage }) => {
     </>
   );
 };
-
 /* ============================================================
-   2. KINH DOANH & ĐƠN HÀNG — Hợp đồng & Tần suất
+   2. TIẾP NHẬN & PHÂN CÔNG — Tạo phiếu
    ============================================================ */
-const HopDongPage = () => (
-  <>
-    <PageHeader title="Hợp đồng & Tần suất quan trắc" subtitle="Theo dõi chu kỳ quan trắc định kỳ theo từng khách hàng" />
-    <PageShell>
-      <SectionCard title="Tần suất quan trắc theo khách hàng" icon={CalendarDays}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {CUSTOMERS.map((c) => (
-            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 220, fontSize: 12.5, fontWeight: 600, flexShrink: 0 }}>{c.name}</div>
-              <div style={{ flex: 1, height: 6, background: "var(--surface-alt)", borderRadius: 4, position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "35%", background: "var(--primary)", borderRadius: 4 }} />
-              </div>
-              <span className="badge" style={{ background: "var(--blue-soft)", color: "var(--blue)", flexShrink: 0 }}>{c.freq}</span>
-              <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-faint)", width: 90, flexShrink: 0, textAlign: "right" }}>{c.nextVisit}</span>
+
+const pad2 = (n) => String(n).padStart(2, "0");
+
+const todayYYMMDD = () => {
+  const d = new Date();
+  return `${String(d.getFullYear()).slice(2)}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`;
+};
+
+// Sinh mã Phiếu YCKN dạng YYMMDD.XX
+const genYcknCode = (ycknCodes) => {
+  const ymd = todayYYMMDD();
+  const nums = Object.values(ycknCodes)
+    .filter((c) => c.startsWith(`${ymd}.`))
+    .map((c) => parseInt(c.split(".")[1], 10) || 0);
+  return `${ymd}.${pad2((nums.length ? Math.max(...nums) : 0) + 1)}`;
+};
+
+const genOrderNo = (ordersList) => {
+  const ym = `${String(new Date().getFullYear()).slice(2)}${pad2(new Date().getMonth() + 1)}`;
+  const nums = ordersList
+    .filter((o) => o.no.startsWith(`DH-${ym}-`))
+    .map((o) => parseInt(o.no.split("-")[2], 10) || 0);
+  return `DH-${ym}-${pad2((nums.length ? Math.max(...nums) : 0) + 1)}`;
+};
+
+const genSampleCode = (ordersList) => {
+  const ym = `${new Date().getFullYear()}${pad2(new Date().getMonth() + 1)}`;
+  const nums = ordersList
+    .map((o) => o.sampleCode)
+    .filter((c) => c?.startsWith(`SAM-${ym}-`))
+    .map((c) => parseInt(c.split("-")[2], 10) || 0);
+  return `SAM-${ym}-${pad2((nums.length ? Math.max(...nums) : 0) + 1)}`;
+};
+
+const flattenOrderSamples = (orderNo, testRequests = TEST_REQUESTS, ycknCodes = YCKN_CODE) => {
+  const req = testRequests?.[orderNo];
+  if (!req) return [];
+
+  let seq = 0;
+  return req.groups.flatMap((g) =>
+    g.samples.map((s) => {
+      seq += 1;
+      return {
+        ...s,
+        groupTitle: g.title || g.type,
+        groupType: g.type,
+        loaiMau: g.type,
+        seq,
+        maSoMau: s.maSoMau || sampleCodeFor(orderNo, seq, ycknCodes),
+        tinhTrang: s.tinhTrang || "Chưa kiểm nghiệm",
+        ghiChu: s.ghiChu || "",
+        images: s.images || [],
+      };
+    })
+  );
+};
+let sampleRowIdCounter = 1;
+const nextSampleRowId = () => `row-${sampleRowIdCounter++}`;
+
+const SampleImageUpload = ({ images, onChange }) => {
+  const inputRef = useRef(null);
+
+  const handleFiles = (files) => {
+    const accepted = Array.from(files).filter((f) => ["image/png", "image/jpeg"].includes(f.type));
+    const rejected = files.length - accepted.length;
+    if (rejected > 0) alert(`${rejected} tệp bị bỏ qua — chỉ chấp nhận .png hoặc .jpeg`);
+    
+    const newImgs = accepted.map((f) => ({ name: f.name, url: URL.createObjectURL(f) }));
+    onChange([...images, ...newImgs]);
+  };
+
+  const handleRemove = (i) => {
+    URL.revokeObjectURL(images[i].url);
+    onChange(images.filter((_, idx) => idx !== i));
+  };
+
+  return (
+    <div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg"
+        multiple
+        style={{ display: "none" }}
+        onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
+      />
+      <button
+        type="button"
+        className="lims-btn lims-btn-ghost"
+        style={{ padding: "4px 10px", fontSize: 12 }}
+        onClick={() => inputRef.current?.click()}
+      >
+        <ImagePlus size={13} /> Ảnh mẫu vật ({images.length})
+      </button>
+      {images.length > 0 && (
+        <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+          {images.map((img, i) => (
+            <div key={i} style={{ position: "relative" }}>
+              <img
+                src={img.url}
+                alt={img.name}
+                style={{ width: 34, height: 34, objectFit: "cover", borderRadius: 4, border: "1px solid var(--line)" }}
+              />
+              <button
+                type="button"
+                onClick={() => handleRemove(i)}
+                style={{
+                  position: "absolute", top: -6, right: -6, width: 16, height: 16, borderRadius: "50%",
+                  background: "#E53E3E", color: "#fff", border: "none", fontSize: 10, cursor: "pointer", lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
             </div>
           ))}
         </div>
-      </SectionCard>
-      <SectionCard title="Hợp đồng theo khách hàng" icon={FileText} style={{ padding: 0 }}>
-        <div className="lims-scroll" style={{ overflowX: "auto" }}>
-          <table className="lims-table">
-            <thead><tr><th>Khách hàng</th><th>Số hợp đồng đang hiệu lực</th><th>Tần suất</th><th>Lịch quan trắc tiếp theo</th></tr></thead>
-            <tbody>
-              {CUSTOMERS.map((c) => (
-                <tr key={c.id}>
-                  <td style={{ fontWeight: 600 }}>{c.name}</td>
-                  <td>{CONTRACTS.filter((k) => k.customerId === c.id).length}</td>
-                  <td>{c.freq}</td>
-                  <td className="mono">{c.nextVisit}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      )}
+    </div>
+  );
+};
+
+const CreatePhieuYCKNModal = ({ onClose, onCreate }) => {
+  const [customer, setCustomer] = useState(CUSTOMERS[0]?.name || "");
+  const [orderName, setOrderName] = useState("");
+  const [selectedIndicators, setSelectedIndicators] = useState([]);
+  const [indicatorSearch, setIndicatorSearch] = useState("");
+  const [openSampleTypes, setOpenSampleTypes] = useState({});
+  const [sampleRowsByType, setSampleRowsByType] = useState({});
+  const [step, setStep] = useState(1);
+
+  // Map cho tra cứu chỉ tiêu O(1)
+  const indicatorMap = useMemo(() => new Map(INDICATORS.map((i) => [i.code, i])), []);
+
+  const toggleIndicator = (sampleType, indicatorCode) => {
+    setSelectedIndicators((prev) => {
+      const exists = prev.some((i) => i.sampleType === sampleType && i.indicatorCode === indicatorCode);
+      if (exists) {
+        setSampleRowsByType((rows) => ({
+          ...rows,
+          [sampleType]: (rows[sampleType] || []).map((r) => ({
+            ...r,
+            chiTieu: r.chiTieu.filter((c) => c !== indicatorCode),
+          })),
+        }));
+        return prev.filter((i) => !(i.sampleType === sampleType && i.indicatorCode === indicatorCode));
+      }
+      return [...prev, { sampleType, indicatorCode }];
+    });
+  };
+
+  const toggleSelectAllInType = (sampleType, indicatorsInType) => {
+    const allSelected = indicatorsInType.every((ind) =>
+      selectedIndicators.some((i) => i.sampleType === sampleType && i.indicatorCode === ind.code)
+    );
+    if (allSelected) {
+      indicatorsInType.forEach((ind) => toggleIndicator(sampleType, ind.code));
+    } else {
+      const toAdd = indicatorsInType
+        .filter((ind) => !selectedIndicators.some((i) => i.sampleType === sampleType && i.indicatorCode === ind.code))
+        .map((ind) => ({ sampleType, indicatorCode: ind.code }));
+      setSelectedIndicators((prev) => [...prev, ...toAdd]);
+    }
+  };
+
+  const groupedSelected = useMemo(() => 
+    SAMPLE_TYPES.map((type) => ({
+      type,
+      codes: selectedIndicators.filter((i) => i.sampleType === type).map((i) => i.indicatorCode),
+    })).filter((g) => g.codes.length > 0),
+  [selectedIndicators]);
+
+  const goToStep2 = () => {
+    setSampleRowsByType((prev) => {
+      const next = { ...prev };
+      groupedSelected.forEach((g) => {
+        if (!next[g.type]?.length) {
+          next[g.type] = [{
+            id: nextSampleRowId(),
+            ten: `Mẫu ${g.type.toLowerCase()} 1`,
+            luong: "",
+            tinhTrang: "Chưa kiểm nghiệm",
+            chiTieu: [...g.codes],
+            ghiChu: "",
+            images: [],
+          }];
+        }
+      });
+      return next;
+    });
+    setStep(2);
+  };
+
+  const addSampleRow = (type) => {
+    setSampleRowsByType((prev) => {
+      const rows = prev[type] || [];
+      const group = groupedSelected.find((g) => g.type === type);
+      return {
+        ...prev,
+        [type]: [
+          ...rows,
+          {
+            id: nextSampleRowId(),
+            ten: `Mẫu ${type.toLowerCase()} ${rows.length + 1}`,
+            luong: "",
+            tinhTrang: "Chưa kiểm nghiệm",
+            chiTieu: group ? [...group.codes] : [],
+            ghiChu: "",
+            images: [],
+          },
+        ],
+      };
+    });
+  };
+
+  const removeSampleRow = (type, id) => {
+    setSampleRowsByType((prev) => ({
+      ...prev,
+      [type]: (prev[type] || []).filter((r) => r.id !== id),
+    }));
+  };
+
+  const updateSampleRow = (type, id, patch) => {
+    setSampleRowsByType((prev) => ({
+      ...prev,
+      [type]: (prev[type] || []).map((r) => (r.id === id ? { ...r, ...patch } : r)),
+    }));
+  };
+
+  const toggleRowIndicator = (type, id, code) => {
+    setSampleRowsByType((prev) => ({
+      ...prev,
+      [type]: (prev[type] || []).map((r) => {
+        if (r.id !== id) return r;
+        const has = r.chiTieu.includes(code);
+        return { ...r, chiTieu: has ? r.chiTieu.filter((c) => c !== code) : [...r.chiTieu, code] };
+      }),
+    }));
+  };
+
+  const totalValidSamples = useMemo(() => 
+    groupedSelected.reduce((sum, g) => {
+      const rows = sampleRowsByType[g.type] || [];
+      return sum + rows.filter((r) => r.ten.trim() && r.chiTieu.length > 0).length;
+    }, 0),
+  [groupedSelected, sampleRowsByType]);
+
+  const handleSubmit = () => {
+    if (totalValidSamples === 0) return;
+    const groups = groupedSelected
+      .map((g) => {
+        const rows = (sampleRowsByType[g.type] || []).filter((r) => r.ten.trim() && r.chiTieu.length > 0);
+        if (!rows.length) return null;
+        return {
+          title: g.type,
+          type: g.type,
+          samples: rows.map((r, idx) => ({
+            stt: idx + 1,
+            ten: r.ten.trim(),
+            luong: r.luong.trim() || "-",
+            tinhTrang: r.tinhTrang,
+            chiTieu: r.chiTieu.map((code) => indicatorMap.get(code)?.name).filter(Boolean),
+            ghiChu: (r.ghiChu || "").trim(),
+            images: r.images || [],
+          })),
+        };
+      })
+      .filter(Boolean);
+
+    onCreate({
+      kh: customer,
+      orderName: orderName.trim() || `Kiểm nghiệm theo yêu cầu — ${customer}`,
+      groups,
+    });
+  };
+
+  const searchKeyword = indicatorSearch.trim().toLowerCase();
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, background: "rgba(15,23,20,0.45)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "var(--surface)", borderRadius: 12, width: "min(920px, 94vw)",
+          maxHeight: "88vh", overflowY: "auto", padding: 24, boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+        className="lims-scroll"
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>Tạo phiếu YCKN trực tiếp</h3>
+            <p style={{ margin: "4px 0 0", fontSize: 12.5, color: "var(--ink-faint)" }}>
+              Không cần đi qua bước Báo giá — dùng khi khách hàng gửi mẫu / yêu cầu kiểm nghiệm trực tiếp.
+            </p>
+          </div>
+          <button className="lims-btn-icon" onClick={onClose}><X size={16} /></button>
         </div>
-      </SectionCard>
-    </PageShell>
-  </>
-);
+
+        {step === 1 && (
+          <>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 18 }}>
+              <div style={{ flex: "1 1 260px" }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>
+                  Khách hàng
+                </label>
+                <SearchableSelect
+                  value={customer}
+                  onChange={(c) => setCustomer(c.name)}
+                  options={CUSTOMERS}
+                  getLabel={(c) => `${c.name} — ${c.id}`}
+                  placeholder="Gõ để tìm khách hàng..."
+                />
+              </div>
+              <div style={{ flex: "1 1 260px" }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>
+                  Tên yêu cầu (tùy chọn)
+                </label>
+                <input
+                  className="lims-input"
+                  style={{ width: "100%" }}
+                  placeholder="VD: Kiểm nghiệm nước thải theo yêu cầu khách hàng"
+                  value={orderName}
+                  onChange={(e) => setOrderName(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div style={{ position: "relative", marginBottom: 14 }}>
+              <Search size={15} color="var(--ink-faint)" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+              <input
+                className="lims-input"
+                style={{ width: "100%", paddingLeft: 36, height: 38, fontSize: 13 }}
+                placeholder="Gõ từ khóa để tìm chỉ tiêu (tên, mã, phương pháp)..."
+                value={indicatorSearch}
+                onChange={(e) => setIndicatorSearch(e.target.value)}
+              />
+            </div>
+
+            <label style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-dark)", display: "block", marginBottom: 10 }}>
+              Chọn Loại mẫu & Chỉ tiêu:
+            </label>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+              {SAMPLE_TYPES.map((type) => {
+                const indicatorsInType = INDICATORS.filter((i) => {
+                  const matchType = i.sampleTypes.includes(type);
+                  if (!searchKeyword) return matchType;
+                  return matchType && (
+                    i.name.toLowerCase().includes(searchKeyword) ||
+                    i.code.toLowerCase().includes(searchKeyword) ||
+                    i.method.toLowerCase().includes(searchKeyword)
+                  );
+                });
+                if (searchKeyword && !indicatorsInType.length) return null;
+
+                const isExpanded = searchKeyword ? true : (openSampleTypes[type] ?? false);
+                const allSelectedInType = indicatorsInType.length > 0 && indicatorsInType.every((ind) =>
+                  selectedIndicators.some((i) => i.sampleType === type && i.indicatorCode === ind.code)
+                );
+                const selectedCountInType = selectedIndicators.filter((i) => i.sampleType === type).length;
+
+                return (
+                  <div key={type} style={{ border: "1px solid var(--line)", borderRadius: 8, overflow: "hidden" }}>
+                    <div
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "10px 14px", background: "var(--surface-alt, #F8FAFC)", userSelect: "none",
+                      }}
+                    >
+                      <div
+                        onClick={() => setOpenSampleTypes((p) => ({ ...p, [type]: !isExpanded }))}
+                        style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", flex: 1 }}
+                      >
+                        <span style={{
+                          padding: "2px 8px", borderRadius: 4, background: "var(--primary-soft)",
+                          color: "var(--primary-dark)", fontSize: 11, fontWeight: 700,
+                        }}>
+                          {SAMPLE_TYPE_ABBR[type] || type}
+                        </span>
+                        <span style={{ fontWeight: 600, fontSize: 13.5 }}>{type}</span>
+                        {selectedCountInType > 0 && (
+                          <span style={{ fontSize: 11.5, color: "var(--primary-dark)", fontWeight: 600 }}>
+                            Đã chọn {selectedCountInType}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleSelectAllInType(type, indicatorsInType); }}
+                          style={{ border: "none", background: "none", color: "var(--primary)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                        >
+                          {allSelectedInType ? "Bỏ chọn nhóm" : "Chọn tất cả nhóm"}
+                        </button>
+                        <div onClick={() => setOpenSampleTypes((p) => ({ ...p, [type]: !isExpanded }))} style={{ cursor: "pointer", color: "var(--ink-faint)" }}>
+                          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                        </div>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div style={{
+                        padding: "12px 14px", display: "grid",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10,
+                        borderTop: "1px solid var(--line)",
+                      }}>
+                        {indicatorsInType.map((ind) => {
+                          const isChecked = selectedIndicators.some((i) => i.sampleType === type && i.indicatorCode === ind.code);
+                          return (
+                            <label key={ind.code} style={{
+                              display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px", borderRadius: 6,
+                              border: isChecked ? "1.5px solid var(--primary)" : "1px solid var(--line)",
+                              background: isChecked ? "var(--primary-soft, #E6F4F1)" : "var(--surface)",
+                              cursor: "pointer", fontSize: 12.5,
+                            }}>
+                              <input type="checkbox" checked={isChecked} onChange={() => toggleIndicator(type, ind.code)} style={{ marginTop: 2 }} />
+                              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                <span style={{ fontWeight: isChecked ? 600 : 500 }}>{ind.name}</span>
+                                <div style={{ display: "flex", gap: 6, fontSize: 11, color: "var(--ink-faint)", flexWrap: "wrap" }}>
+                                  <span className="mono" style={{ color: "var(--primary-dark)" }}>{ind.code}</span>
+                                  <span>•</span>
+                                  <span>{ind.method}</span>
+                                </div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button className="lims-btn lims-btn-ghost" onClick={onClose}>Hủy</button>
+              <button
+                className="lims-btn lims-btn-primary"
+                disabled={selectedIndicators.length === 0}
+                onClick={goToStep2}
+              >
+                Tiếp tục — Khai báo mẫu con
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <label style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-dark)", display: "block", marginBottom: 10 }}>
+              Khai báo mẫu con theo từng Mục (loại mẫu):
+            </label>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20 }}>
+              {groupedSelected.map((g, gi) => {
+                const rows = sampleRowsByType[g.type] || [];
+                return (
+                  <div key={g.type} style={{ border: "1px solid var(--line)", borderRadius: 8, overflow: "hidden" }}>
+                    <div style={{
+                      padding: "10px 14px", background: "var(--surface-alt, #F8FAFC)",
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                    }}>
+                      <span style={{ fontWeight: 700, fontSize: 13 }}>
+                        Mục {["I", "II", "III", "IV", "V", "VI", "VII"][gi] || gi + 1}: {g.type}
+                      </span>
+                      <button
+                        type="button"
+                        className="lims-btn lims-btn-ghost"
+                        style={{ padding: "4px 10px", fontSize: 12 }}
+                        onClick={() => addSampleRow(g.type)}
+                      >
+                        <Plus size={13} /> Thêm mẫu
+                      </button>
+                    </div>
+
+                    <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+                      {rows.map((r) => (
+                        <div key={r.id} style={{ border: "1px solid var(--line)", borderRadius: 8, padding: 12 }}>
+                          {/* Hàng 1: Tên, Lượng mẫu, Tình trạng */}
+                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+                            <div style={{ flex: "1 1 220px" }}>
+                              <label style={{ fontSize: 11, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>Tên mẫu</label>
+                              <input
+                                className="lims-input" style={{ width: "100%" }}
+                                value={r.ten}
+                                onChange={(e) => updateSampleRow(g.type, r.id, { ten: e.target.value })}
+                              />
+                            </div>
+                            <div style={{ flex: "0 1 140px" }}>
+                              <label style={{ fontSize: 11, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>Lượng mẫu</label>
+                              <input
+                                className="lims-input" style={{ width: "100%" }}
+                                placeholder="VD: 2 lít"
+                                value={r.luong}
+                                onChange={(e) => updateSampleRow(g.type, r.id, { luong: e.target.value })}
+                              />
+                            </div>
+                            <div style={{ flex: "0 1 180px" }}>
+                              <label style={{ fontSize: 11, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>Tình trạng mẫu</label>
+                              <select
+                                className="lims-input" style={{ width: "100%" }}
+                                value={r.tinhTrang}
+                                onChange={(e) => updateSampleRow(g.type, r.id, { tinhTrang: e.target.value })}
+                              >
+                                {SAMPLE_TEST_STATUS.map((t) => <option key={t}>{t}</option>)}
+                              </select>
+                            </div>
+                            {rows.length > 1 && (
+                              <div style={{ display: "flex", alignItems: "flex-end" }}>
+                                <button className="lims-btn-icon" onClick={() => removeSampleRow(g.type, r.id)} title="Xóa mẫu này">
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Hàng 2: Ghi chú & Upload ảnh */}
+                          <div style={{ display: "flex", gap: 14, marginBottom: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+                            <div style={{ flex: "1 1 220px" }}>
+                              <label style={{ fontSize: 11, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>
+                                Ghi chú
+                              </label>
+                              <input
+                                className="lims-input" style={{ width: "100%" }}
+                                placeholder="Ghi chú thêm (nếu có)..."
+                                value={r.ghiChu || ""}
+                                onChange={(e) => updateSampleRow(g.type, r.id, { ghiChu: e.target.value })}
+                              />
+                            </div>
+                            <SampleImageUpload
+                              images={r.images || []}
+                              onChange={(imgs) => updateSampleRow(g.type, r.id, { images: imgs })}
+                            />
+                          </div>
+
+                          {/* Hàng 3: Chỉ tiêu áp dụng */}
+                          <label style={{ fontSize: 11, color: "var(--ink-faint)", display: "block", marginBottom: 5 }}>
+                            Chỉ tiêu thử áp dụng cho mẫu này
+                          </label>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {g.codes.map((code) => {
+                              const ind = indicatorMap.get(code);
+                              const checked = r.chiTieu.includes(code);
+                              return (
+                                <label key={code} style={{
+                                  display: "flex", alignItems: "center", gap: 5, padding: "4px 8px",
+                                  borderRadius: 999, border: checked ? "1.5px solid var(--primary)" : "1px solid var(--line)",
+                                  background: checked ? "var(--primary-soft, #E6F4F1)" : "var(--surface)",
+                                  fontSize: 11.5, cursor: "pointer",
+                                }}>
+                                  <input type="checkbox" checked={checked} onChange={() => toggleRowIndicator(g.type, r.id, code)} style={{ margin: 0 }} />
+                                  {ind?.name}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+              <button className="lims-btn lims-btn-ghost" onClick={() => setStep(1)}>← Quay lại chọn chỉ tiêu</button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="lims-btn lims-btn-ghost" onClick={onClose}>Hủy</button>
+                <button className="lims-btn lims-btn-primary" disabled={totalValidSamples === 0} onClick={handleSubmit}>
+                  <FileText size={14} /> Tạo phiếu YCKN ({totalValidSamples} mẫu)
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
 
 /* ============================================================
-   3. TIẾP NHẬN & PHÂN CÔNG — Tiếp nhận & Mã hóa mẫu
+   TRANG CHÍNH — TaoPhieuYCKNPage
    ============================================================ */
-const MaHoaMauPage = () => {
-  const [received, setReceived] = useState(() => new Set(Object.keys(TEST_REQUESTS).filter((no) => ORDERS.find((o) => o.no === no)?.status !== "Báo giá")));
+const TaoPhieuYCKNPage = ({ role, setPage }) => {
+  const [received, setReceived] = useState(
+    () => new Set(Object.keys(TEST_REQUESTS).filter((no) => ORDERS.find((o) => o.no === no)?.status !== "Báo giá"))
+  );
   const [expanded, setExpanded] = useState(null);
-  const orderNos = Object.keys(TEST_REQUESTS);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Dữ liệu các phiếu tạo trực tiếp (không qua báo giá) — state cục bộ
+  const [manualRequests, setManualRequests] = useState({});
+  const [manualOrders, setManualOrders] = useState([]);
+  const [manualYckn, setManualYckn] = useState({});
+
+  // Gộp dữ liệu tĩnh (mock) với dữ liệu tạo trực tiếp để hiển thị thống nhất
+  const allTestRequests = { ...TEST_REQUESTS, ...manualRequests };
+  const allOrders = [...ORDERS, ...manualOrders];
+  const allYcknCode = { ...YCKN_CODE, ...manualYckn };
+
+  const orderNos = Object.keys(allTestRequests);
   const pending = orderNos.filter((no) => !received.has(no));
   const done = orderNos.filter((no) => received.has(no));
 
   const createPhieu = (no) => setReceived((prev) => new Set(prev).add(no));
 
+  const flatten = (no) => flattenOrderSamples(no, allTestRequests, allYcknCode);
+
+  const handleCreateDirect = ({ kh, orderName, groups }) => {
+    const no = genOrderNo(allOrders);
+    const yckn = genYcknCode(allYcknCode);
+
+    setManualOrders((prev) => [
+      ...prev,
+      {
+        no,
+        name: orderName,
+        type: "Mẫu gửi",
+        sampleCode: "",
+        ngayQT: new Date().toLocaleDateString("vi-VN"),
+        ngayTra: "",
+        kh,
+        donVi: "Tạo trực tiếp (không qua báo giá)",
+        status: "Tiếp nhận",
+      },
+    ]);
+    setManualRequests((prev) => ({ ...prev, [no]: { kh, groups } }));
+    setManualYckn((prev) => ({ ...prev, [no]: yckn }));
+    // Phiếu tạo trực tiếp coi như đã tiếp nhận ngay, bỏ qua bước "chờ tiếp nhận"
+    setReceived((prev) => new Set(prev).add(no));
+    setShowCreateModal(false);
+    setExpanded(no);
+  };
+
   return (
     <>
-      <PageHeader title="Tiếp nhận và Tạo phiếu" subtitle="Tạo Phiếu Yêu cầu Kiểm nghiệm (YCKN) và chia mẫu con từ danh mục chỉ tiêu đã chốt ở Báo giá" />
+      <PageHeader
+        title="Tiếp nhận và Tạo phiếu"
+        subtitle="Tạo Phiếu Yêu cầu Kiểm nghiệm (YCKN) từ báo giá đã chốt, hoặc tạo phiếu trực tiếp không qua báo giá"
+      />
       <PageShell>
         <SectionCard title="Đơn hàng chờ tiếp nhận" icon={ScanLine} style={{ padding: 0 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", padding: "12px 16px 0" }}>
+            <button className="lims-btn lims-btn-primary" onClick={() => setShowCreateModal(true)}>
+              <Plus size={14} /> Tạo phiếu YCKN trực tiếp
+            </button>
+          </div>
           <div className="lims-scroll" style={{ overflowX: "auto" }}>
             <table className="lims-table">
               <thead><tr><th>Đơn hàng</th><th>Tên</th><th>Khách hàng</th><th>Số chỉ tiêu đã chốt</th><th></th></tr></thead>
               <tbody>
                 {pending.length === 0 && <tr><td colSpan={5} style={{ color: "var(--ink-faint)", padding: 16 }}>Không có đơn hàng chờ tiếp nhận.</td></tr>}
                 {pending.map((no) => {
-                  const o = ORDERS.find((x) => x.no === no);
-                  const flat = flattenOrderSamples(no);
+                  const o = allOrders.find((x) => x.no === no);
+                  const flat = flatten(no);
                   return (
                     <tr key={no}>
                       <td className="mono">{no}</td>
                       <td style={{ fontWeight: 600 }}>{o?.name}</td>
-                      <td>{TEST_REQUESTS[no].kh}</td>
+                      <td>{allTestRequests[no].kh}</td>
                       <td className="mono">{flat.length} mẫu con</td>
                       <td><button className="lims-btn lims-btn-primary" style={{ padding: "5px 10px" }} onClick={() => createPhieu(no)}><FileText size={13} /> Tạo phiếu</button></td>
                     </tr>
@@ -2110,25 +3018,33 @@ const MaHoaMauPage = () => {
         <SectionCard title="Hợp đồng đã tiếp nhận" icon={PackageCheck} style={{ padding: 0 }}>
           <div className="lims-scroll" style={{ overflowX: "auto" }}>
             <table className="lims-table">
-              <thead><tr><th></th><th>Mã Phiếu YCKN</th><th>Đơn hàng</th><th>Khách hàng</th><th>Số mẫu con</th></tr></thead>
+              <thead><tr><th></th><th>Mã Phiếu YCKN</th><th>Đơn hàng</th><th>Khách hàng</th><th>Số mẫu con</th><th>Nguồn</th></tr></thead>
               <tbody>
-                {done.length === 0 && <tr><td colSpan={5} style={{ color: "var(--ink-faint)", padding: 16 }}>Chưa có hợp đồng nào được tạo phiếu.</td></tr>}
+                {done.length === 0 && <tr><td colSpan={6} style={{ color: "var(--ink-faint)", padding: 16 }}>Chưa có hợp đồng nào được tạo phiếu.</td></tr>}
                 {done.map((no) => {
-                  const o = ORDERS.find((x) => x.no === no);
-                  const flat = flattenOrderSamples(no);
+                  const o = allOrders.find((x) => x.no === no);
+                  const flat = flatten(no);
                   const isOpen = expanded === no;
+                  const isManual = Boolean(manualRequests[no]);
                   return (
                     <React.Fragment key={no}>
                       <tr style={{ cursor: "pointer" }} onClick={() => setExpanded(isOpen ? null : no)}>
                         <td>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
-                        <td><SpecimenTag>{YCKN_CODE[no]}</SpecimenTag></td>
+                        <td><SpecimenTag>{allYcknCode[no]}</SpecimenTag></td>
                         <td className="mono" style={{ color: "var(--ink-soft)" }}>{no}</td>
-                        <td style={{ fontWeight: 600 }}>{TEST_REQUESTS[no].kh}</td>
+                        <td style={{ fontWeight: 600 }}>{allTestRequests[no].kh}</td>
                         <td className="mono">{flat.length}</td>
+                        <td>
+                          {isManual ? (
+                            <span className="badge" style={{ background: "var(--blue-soft)", color: "var(--blue)" }}>Trực tiếp</span>
+                          ) : (
+                            <span className="badge" style={{ background: "var(--gray-soft)", color: "#5B6659" }}>Từ báo giá</span>
+                          )}
+                        </td>
                       </tr>
                       {isOpen && (
                         <tr>
-                          <td colSpan={5} style={{ background: "var(--surface-alt)", padding: 0 }}>
+                          <td colSpan={6} style={{ background: "var(--surface-alt)", padding: 0 }}>
                             <table className="lims-table" style={{ margin: "4px 0" }}>
                               <thead><tr><th>Mã mẫu con</th><th>Tên mẫu</th><th>Lượng mẫu</th><th>Tình trạng</th><th>Chỉ tiêu thử</th></tr></thead>
                               <tbody>
@@ -2154,9 +3070,14 @@ const MaHoaMauPage = () => {
           </div>
         </SectionCard>
       </PageShell>
+
+      {showCreateModal && (
+        <CreatePhieuYCKNModal onClose={() => setShowCreateModal(false)} onCreate={handleCreateDirect} />
+      )}
     </>
   );
 };
+
 
 /* ============================================================
    3. TIẾP NHẬN & PHÂN CÔNG — Yêu cầu thử nghiệm
@@ -2218,21 +3139,6 @@ const TestRequestPrintModal = ({ orderNo, request, onClose }) => {
   );
 };
 
-// Gán số thứ tự toàn cục (dùng để sinh mã mẫu con) cho từng mẫu trong 1 Phiếu YCKN,
-// vì các Mục (I, II...) đánh STT riêng nhưng mã mẫu con phải là 1 chuỗi liên tục trong phiếu.
-const flattenOrderSamples = (orderNo) => {
-  const req = TEST_REQUESTS[orderNo];
-  if (!req) return [];
-  let seq = 0;
-  const out = [];
-  req.groups.forEach((g) => {
-    g.samples.forEach((s) => {
-      seq += 1;
-      out.push({ ...s, groupTitle: g.title, groupType: g.type, seq, maSoMau: sampleCodeFor(orderNo, seq) });
-    });
-  });
-  return out;
-};
 
 const YeuCauThuNghiemPage = () => {
   const orderNos = Object.keys(TEST_REQUESTS);
@@ -2534,20 +3440,43 @@ const evaluateResult = (b) => {
   return "ok";
 };
 
-const NhapKetQuaPage = ({ role }) => {
+const NhapKetQuaPage = ({ role, batches, setBatches }) => {
   const myName = ROLES.find((r) => r.key === "A").name;
-  const editable = BATCHES.filter((b) => ["ASSIGNED", "TESTING", "REJECTED"].includes(b.status) && (role !== "A" || b.tech === myName));
-  const [rows, setRows] = useState(editable.map((b) => ({ ...b })));
+  const [filter, setFilter] = useState(EMPTY_FILTER);
+ 
+  const editableStatuses = ["ASSIGNED", "TESTING", "REJECTED"];
+  const rowIndexes = batches
+    .map((b, i) => ({ b, i }))
+    .filter(
+      ({ b }) =>
+        editableStatuses.includes(b.status) &&
+        (role !== "A" || b.tech === myName) &&
+        batchMatchesSelection(b, filter)
+    )
+    .map(({ i }) => i);
+ 
+  const update = (globalIdx, field, value) =>
+    setBatches((all) => all.map((row, idx) => (idx === globalIdx ? { ...row, [field]: value } : row)));
+ 
   const submitForApproval = () => {
-  setRows((r) => r.map((row) => row.result ? { ...row, status: "PENDING_APPROVAL" } : row));
-};
-
-  const update = (i, field, value) => setRows((r) => r.map((row, idx) => idx === i ? { ...row, [field]: value } : row));
-
+    setBatches((all) =>
+      all.map((row, idx) =>
+        rowIndexes.includes(idx) && row.result ? { ...row, status: "PENDING_APPROVAL" } : row
+      )
+    );
+  };
+ 
   return (
     <>
-      <PageHeader title="Nhập kết quả thử nghiệm" subtitle={role === "A" ? `Chỉ hiển thị công việc được giao cho ${myName}` : "Bulk Entry dạng Excel — cảnh báo tự động nếu vượt ngưỡng hoặc dưới LOD"} />
+      <PageHeader
+        title="Nhập kết quả thử nghiệm"
+        subtitle={role === "A" ? `Chỉ hiển thị công việc được giao cho ${myName}` : "Bulk Entry dạng Excel — cảnh báo tự động nếu vượt ngưỡng hoặc dưới LOD"}
+      />
       <PageShell>
+        <SectionCard title="Lọc theo Khách hàng → Hợp đồng → Phiếu YCKN → Phiếu con" icon={ListFilter}>
+          <CascadeFilter value={filter} onChange={setFilter} />
+        </SectionCard>
+ 
         <SectionCard title="Nhập liệu hàng loạt" icon={FlaskConical} style={{ padding: 0 }}>
           <div className="lims-scroll" style={{ overflowX: "auto" }}>
             <table className="lims-table">
@@ -2558,10 +3487,11 @@ const NhapKetQuaPage = ({ role }) => {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((b, i) => {
+                {rowIndexes.map((idx) => {
+                  const b = batches[idx];
                   const ev = evaluateResult(b);
                   return (
-                    <tr key={i}>
+                    <tr key={idx}>
                       <td><SpecimenTag>{b.sample}</SpecimenTag></td>
                       <td style={{ fontWeight: 600 }}>{b.indicator}</td>
                       <td style={{ color: "var(--ink-soft)" }}>{b.method}</td>
@@ -2572,18 +3502,22 @@ const NhapKetQuaPage = ({ role }) => {
                           className={"lims-input " + (ev === "warn" ? "warn" : ev === "bad" ? "bad" : "")}
                           style={{ width: 90 }}
                           value={b.result}
-                          onChange={(e) => update(i, "result", e.target.value)}
+                          onChange={(e) => update(idx, "result", e.target.value)}
                           placeholder="—"
                         />
                         {ev === "bad" && <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, color: "var(--red)", marginTop: 3 }}><AlertTriangle size={11} /> Vượt ngưỡng {b.limit}</div>}
                         {ev === "warn" && <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, color: "var(--amber)", marginTop: 3 }}><AlertTriangle size={11} /> Dưới LOD</div>}
                       </td>
-                      <td><input className="lims-input" style={{ width: 140 }} value={b.note} onChange={(e) => update(i, "note", e.target.value)} placeholder="Ghi chú" /></td>
+                      <td><input className="lims-input" style={{ width: 140 }} value={b.note} onChange={(e) => update(idx, "note", e.target.value)} placeholder="Ghi chú" /></td>
                       <td><button className="lims-btn-icon" title="Đính kèm file"><Paperclip size={14} /></button></td>
                     </tr>
                   );
                 })}
-                {rows.length === 0 && <tr><td colSpan={8} style={{ padding: 16, color: "var(--ink-faint)" }}>Không có chỉ tiêu nào đang chờ nhập kết quả.</td></tr>}
+                {rowIndexes.length === 0 && (
+                  <tr><td colSpan={8} style={{ padding: 16, color: "var(--ink-faint)" }}>
+                    Không có chỉ tiêu nào khớp bộ lọc hiện tại.
+                  </td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -2598,25 +3532,151 @@ const NhapKetQuaPage = ({ role }) => {
 };
 
 /* ============================================================
-   5. DUYỆT & BÁO CÁO KẾT QUẢ — Duyệt phiếu kết quả
+   5. TỔNG HỢP — Quản lý (role B) tổng hợp toàn bộ chỉ tiêu của
+   một Phiếu YCKN sau khi KNV đã nộp kết quả, được rà soát/chỉnh
+   sửa lần cuối rồi mới chuyển cho Trưởng phòng duyệt.
    ============================================================ */
-const DuyetPhieuPage = ({ role }) => {
-  const [rows, setRows] = useState(BATCHES.filter((b) => b.status === "PENDING_APPROVAL").map((b) => ({ ...b })));
+const TongHopPhieuPage = ({ batches, setBatches }) => {
+  const [filter, setFilter] = useState(EMPTY_FILTER);
+ 
+  const groupedByPhieu = useMemo(() => {
+    const byOrder = new Map();
+    batches.forEach((b, idx) => {
+      if (!batchMatchesSelection(b, filter)) return;
+      if (!byOrder.has(b.order)) byOrder.set(b.order, []);
+      byOrder.get(b.order).push(idx);
+    });
+    return [...byOrder.entries()]
+      .map(([orderNo, idxs]) => ({ orderNo, idxs }))
+      // Chỉ hiện những phiếu không còn chỉ tiêu nào đang ở KNV (ASSIGNED/TESTING)
+      .filter(({ idxs }) => idxs.some((i) => batches[i].status === "PENDING_APPROVAL") &&
+        !idxs.some((i) => ["ASSIGNED", "TESTING"].includes(batches[i].status)));
+  }, [batches, filter]);
+ 
+  const [expanded, setExpanded] = useState(groupedByPhieu[0]?.orderNo || null);
+ 
+  const update = (idx, field, value) =>
+    setBatches((all) => all.map((row, i) => (i === idx ? { ...row, [field]: value } : row)));
+ 
+  const confirmAggregate = (idxs) => {
+    setBatches((all) =>
+      all.map((row, i) =>
+        idxs.includes(i) && row.status === "PENDING_APPROVAL" ? { ...row, status: "PENDING_HEAD_APPROVAL" } : row
+      )
+    );
+  };
+ 
+  return (
+    <>
+      <PageHeader
+        title="Tổng hợp & Gửi duyệt"
+        subtitle="Khi mọi chỉ tiêu của một Phiếu YCKN đã có kết quả, rà soát toàn bộ tại đây trước khi chuyển cho Trưởng phòng ký duyệt"
+      />
+      <PageShell>
+        <SectionCard title="Lọc theo Khách hàng → Hợp đồng → Phiếu YCKN → Phiếu con" icon={ListFilter}>
+          <CascadeFilter value={filter} onChange={setFilter} />
+        </SectionCard>
+ 
+        {groupedByPhieu.length === 0 && (
+          <SectionCard title="Chưa có phiếu nào sẵn sàng tổng hợp" icon={Layers}>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--ink-faint)" }}>
+              Không có Phiếu YCKN nào vừa khớp bộ lọc vừa đã được Kiểm nghiệm viên nộp đủ kết quả.
+            </p>
+          </SectionCard>
+        )}
+ 
+        {groupedByPhieu.map(({ orderNo, idxs }) => {
+          const isOpen = expanded === orderNo;
+          const kh = TEST_REQUESTS[orderNo]?.kh || batches[idxs[0]]?.order;
+          const rows = idxs.map((i) => ({ i, b: batches[i] }));
+          const badCount = rows.filter(({ b }) => evaluateResult(b) === "bad").length;
+ 
+          return (
+            <div key={orderNo} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+              <div
+                onClick={() => setExpanded(isOpen ? null : orderNo)}
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", cursor: "pointer", background: isOpen ? "var(--surface-alt)" : "var(--surface)" }}
+              >
+                {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                <SpecimenTag>{YCKN_CODE[orderNo] || orderNo}</SpecimenTag>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{kh}</span>
+                <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-faint)" }}>{orderNo}</span>
+                <span className="badge" style={{ background: "var(--violet-soft)", color: "var(--violet)", marginLeft: "auto" }}>{rows.length} chỉ tiêu đã nộp</span>
+                {badCount > 0 && <span className="badge" style={{ background: "var(--red-soft)", color: "var(--red)" }}><AlertTriangle size={11} /> {badCount} vượt ngưỡng</span>}
+              </div>
+ 
+              {isOpen && (
+                <>
+                  <div className="lims-scroll" style={{ overflowX: "auto", borderTop: "1px solid var(--line)" }}>
+                    <table className="lims-table">
+                      <thead>
+                        <tr><th>Mã mẫu con</th><th>Chỉ tiêu</th><th>KNV thực hiện</th><th>Kết quả</th><th>QCVN</th><th>Đánh giá</th><th>Ghi chú</th></tr>
+                      </thead>
+                      <tbody>
+                        {rows.map(({ i, b }) => {
+                          const ev = evaluateResult(b);
+                          return (
+                            <tr key={i}>
+                              <td><SpecimenTag>{b.kyHieu || b.sample}</SpecimenTag></td>
+                              <td style={{ fontWeight: 600 }}>{b.indicator}</td>
+                              <td>{b.tech}</td>
+                              <td>
+                                <input
+                                  className={"lims-input " + (ev === "bad" ? "bad" : ev === "warn" ? "warn" : "")}
+                                  style={{ width: 90 }}
+                                  value={b.result}
+                                  onChange={(e) => update(i, "result", e.target.value)}
+                                />
+                              </td>
+                              <td className="mono" style={{ color: "var(--ink-soft)" }}>{b.qcvn || b.limit}</td>
+                              <td>
+                                {ev === "bad"
+                                  ? <span className="badge" style={{ background: "var(--red-soft)", color: "var(--red)" }}><XCircle size={12} /> Vượt ngưỡng</span>
+                                  : <span className="badge" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}><CheckCircle2 size={12} /> Đạt</span>}
+                              </td>
+                              <td><input className="lims-input" style={{ width: 140 }} value={b.note} onChange={(e) => update(i, "note", e.target.value)} placeholder="Ghi chú kiểm tra lại" /></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "flex-end", padding: 14, borderTop: "1px solid var(--line)" }}>
+                    <button className="lims-btn lims-btn-primary" onClick={() => confirmAggregate(idxs)}>
+                      <SendHorizontal size={14} /> Xác nhận tổng hợp & Chuyển Trưởng phòng duyệt
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </PageShell>
+    </>
+  );
+};
+
+/* ============================================================
+   5. DUYỆT & BÁO CÁO KẾT QUẢ — Duyệt phiếu kết quả
+   Chỉ nhận phiếu đã được Quản lý tổng hợp (PENDING_HEAD_APPROVAL)
+   ============================================================ */
+const DuyetPhieuPage = ({ role, batches, setBatches }) => {
+  const rowIndexes = batches.map((b, i) => i).filter((i) => batches[i].status === "PENDING_HEAD_APPROVAL");
   const [rejecting, setRejecting] = useState(null);
   const [reason, setReason] = useState("");
   const canApprove = role === "C";
 
-  const approve = (i) => setRows((r) => r.map((row, idx) => idx === i ? { ...row, status: "APPROVED_COMPLETED" } : row));
-  const openReject = (i) => { setRejecting(i); setReason(""); };
+  const approve = (idx) => setBatches((all) => all.map((row, i) => (i === idx ? { ...row, status: "APPROVED_COMPLETED" } : row)));
+  const openReject = (idx) => { setRejecting(idx); setReason(""); };
   const confirmReject = () => {
     if (!reason.trim()) return;
-    setRows((r) => r.map((row, idx) => idx === rejecting ? { ...row, status: "REJECTED", note: reason } : row));
+    setBatches((all) => all.map((row, i) => (i === rejecting ? { ...row, status: "REJECTED", note: reason } : row)));
     setRejecting(null);
   };
 
   return (
     <>
-      <PageHeader title="Duyệt phiếu kết quả" subtitle={canApprove ? "So sánh kết quả KNV với QCVN trước khi ký số" : "Chỉ vai trò Lãnh đạo mới có quyền Duyệt / Từ chối — bạn đang xem ở chế độ chỉ đọc"} />
+      <PageHeader title="Duyệt phiếu kết quả" subtitle={canApprove ? "Chỉ hiển thị các chỉ tiêu đã được Quản lý tổng hợp — so sánh với QCVN trước khi ký số" : "Chỉ vai trò Trưởng phòng mới có quyền Duyệt / Từ chối — bạn đang xem ở chế độ chỉ đọc"} />
       <PageShell>
         <SectionCard title="Hàng chờ duyệt" icon={ClipboardCheck} style={{ padding: 0 }}>
           <div className="lims-scroll" style={{ overflowX: "auto" }}>
@@ -2625,11 +3685,12 @@ const DuyetPhieuPage = ({ role }) => {
                 <tr><th>Mẫu</th><th>Chỉ tiêu</th><th>Kết quả KNV</th><th>QCVN</th><th>Đánh giá</th><th>KNV thực hiện</th><th>Trạng thái</th><th></th></tr>
               </thead>
               <tbody>
-                {rows.map((b, i) => {
+                {rowIndexes.map((idx) => {
+                  const b = batches[idx];
                   const ev = evaluateResult(b);
                   const st = BATCH_STATUS[b.status];
                   return (
-                    <tr key={i}>
+                    <tr key={idx}>
                       <td><SpecimenTag>{b.kyHieu || b.sample}</SpecimenTag></td>
                       <td style={{ fontWeight: 600 }}>{b.indicator}</td>
                       <td className="mono">{b.result} {b.unit !== "-" ? b.unit : ""}</td>
@@ -2642,20 +3703,18 @@ const DuyetPhieuPage = ({ role }) => {
                       <td>{b.tech}</td>
                       <td><span className="badge" style={{ background: st.bg, color: st.fg }}>{st.label}</span></td>
                       <td>
-                        {b.status === "PENDING_APPROVAL" && canApprove && (
+                        {canApprove && (
                           <div style={{ display: "flex", gap: 6 }}>
-                            <button className="lims-btn lims-btn-primary" style={{ padding: "5px 9px" }} onClick={() => approve(i)}><PenLine size={13} /> Duyệt & Ký số</button>
-                            <button className="lims-btn lims-btn-danger" style={{ padding: "5px 9px" }} onClick={() => openReject(i)}><XCircle size={13} /> Từ chối</button>
+                            <button className="lims-btn lims-btn-primary" style={{ padding: "5px 9px" }} onClick={() => approve(idx)}><PenLine size={13} /> Duyệt & Ký số</button>
+                            <button className="lims-btn lims-btn-danger" style={{ padding: "5px 9px" }} onClick={() => openReject(idx)}><XCircle size={13} /> Từ chối</button>
                           </div>
                         )}
-                        {b.status === "PENDING_APPROVAL" && !canApprove && <span style={{ fontSize: 12, color: "var(--ink-faint)" }}>Chờ Lãnh đạo duyệt</span>}
-                        {b.status === "APPROVED_COMPLETED" && <span style={{ fontSize: 12, color: "var(--primary-dark)", fontWeight: 600 }}>Đã sinh CoA</span>}
-                        {b.status === "REJECTED" && <span style={{ fontSize: 12, color: "var(--red)" }}>Đã đẩy về KNV</span>}
+                        {!canApprove && <span style={{ fontSize: 12, color: "var(--ink-faint)" }}>Chờ Trưởng phòng duyệt</span>}
                       </td>
                     </tr>
                   );
                 })}
-                {rows.length === 0 && <tr><td colSpan={8} style={{ padding: 16, color: "var(--ink-faint)" }}>Không còn phiếu nào chờ duyệt.</td></tr>}
+                {rowIndexes.length === 0 && <tr><td colSpan={8} style={{ padding: 16, color: "var(--ink-faint)" }}>Không còn phiếu nào chờ duyệt. Các chỉ tiêu mới nộp cần Quản lý tổng hợp trước.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -2685,10 +3744,10 @@ const DuyetPhieuPage = ({ role }) => {
 /* ============================================================
    5. DUYỆT & BÁO CÁO KẾT QUẢ — Kết quả thử nghiệm
    ============================================================ */
-const KetQuaThuNghiemPage = () => {
-  const samples = [...new Set(BATCHES.map((b) => b.kyHieu))];
+const KetQuaThuNghiemPage = ({ batches }) => {
+  const samples = [...new Set(batches.map((b) => b.kyHieu))];
   const [maSoMau, setMaSoMau] = useState(samples[0]);
-  const rows = BATCHES.filter((b) => b.kyHieu === maSoMau);
+  const rows = batches.filter((b) => b.kyHieu === maSoMau);
   const order = ORDERS.find((o) => o.no === rows[0]?.order);
 
   return (
@@ -2705,19 +3764,23 @@ const KetQuaThuNghiemPage = () => {
         <SectionCard title={`Kết quả — mẫu ${maSoMau}`} icon={FlaskConical} style={{ padding: 0 }}>
           <div className="lims-scroll" style={{ overflowX: "auto" }}>
             <table className="lims-table">
-              <thead><tr><th>STT</th><th>Chỉ tiêu</th><th>Phương pháp phân tích</th><th>Kết quả</th><th>Đơn vị</th><th>QCVN</th></tr></thead>
+              <thead><tr><th>STT</th><th>Chỉ tiêu</th><th>Phương pháp phân tích</th><th>Kết quả</th><th>Đơn vị</th><th>QCVN</th><th>Trạng thái</th></tr></thead>
               <tbody>
-                {rows.map((b, i) => (
-                  <tr key={i}>
-                    <td className="mono">{i + 1}</td>
-                    <td style={{ fontWeight: 600 }}>{b.indicator}</td>
-                    <td style={{ color: "var(--ink-soft)" }}>{b.method}</td>
-                    <td className="mono" style={{ fontWeight: 700 }}>{b.result || "—"}</td>
-                    <td className="mono">{b.unit}</td>
-                    <td style={{ color: "var(--ink-soft)" }}>{b.qcvn || b.limit}</td>
-                  </tr>
-                ))}
-                {rows.length === 0 && <tr><td colSpan={6} style={{ padding: 16, color: "var(--ink-faint)" }}>Chưa có kết quả cho mẫu này.</td></tr>}
+                {rows.map((b, i) => {
+                  const st = BATCH_STATUS[b.status];
+                  return (
+                    <tr key={i}>
+                      <td className="mono">{i + 1}</td>
+                      <td style={{ fontWeight: 600 }}>{b.indicator}</td>
+                      <td style={{ color: "var(--ink-soft)" }}>{b.method}</td>
+                      <td className="mono" style={{ fontWeight: 700 }}>{b.result || "—"}</td>
+                      <td className="mono">{b.unit}</td>
+                      <td style={{ color: "var(--ink-soft)" }}>{b.qcvn || b.limit}</td>
+                      <td><span className="badge" style={{ background: st.bg, color: st.fg }}>{st.label}</span></td>
+                    </tr>
+                  );
+                })}
+                {rows.length === 0 && <tr><td colSpan={7} style={{ padding: 16, color: "var(--ink-faint)" }}>Chưa có kết quả cho mẫu này.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -2748,7 +3811,7 @@ const StatFilters = () => (
 
 const TkKinhDoanhPage = () => (
   <>
-    <PageHeader title="Thống kê Kinh doanh & Khách hàng" subtitle="Doanh thu và tỷ trọng theo khách hàng" />
+    <PageHeader title="Thống kê Đơn hàng & Khách hàng" subtitle="Doanh thu và tỷ trọng theo khách hàng" />
     <PageShell>
       <StatFilters />
       <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16 }}>
@@ -2850,7 +3913,7 @@ const TkNangSuatPage = () => (
   </>
 );
 
-const TkKyThuatPage = () => (
+const TkKyThuatPage = ({ batches }) => (
   <>
     <PageHeader title="Thống kê Kỹ thuật" subtitle="Mẫu, chỉ tiêu, kết quả theo phương pháp thử" />
     <PageShell>
@@ -2861,8 +3924,8 @@ const TkKyThuatPage = () => (
             <thead><tr><th>Chỉ tiêu</th><th>Phương pháp</th><th>Số lượt thử</th><th>Số bị từ chối</th><th>Tỷ lệ đạt</th></tr></thead>
             <tbody>
               {INDICATORS.map((ind) => {
-                const total = BATCHES.filter((b) => b.indicator === ind.name).length;
-                const rejected = BATCHES.filter((b) => b.indicator === ind.name && b.status === "REJECTED").length;
+                const total = batches.filter((b) => b.indicator === ind.name).length;
+                const rejected = batches.filter((b) => b.indicator === ind.name && b.status === "REJECTED").length;
                 const rate = total ? Math.round(((total - rejected) / total) * 100) : 100;
                 return (
                   <tr key={ind.code}>
@@ -2874,6 +3937,44 @@ const TkKyThuatPage = () => (
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
+    </PageShell>
+  </>
+);
+const HopDongPage = () => (
+  <>
+    <PageHeader title="Hợp đồng & Tần suất quan trắc" subtitle="Theo dõi chu kỳ quan trắc định kỳ theo từng khách hàng" />
+    <PageShell>
+      <SectionCard title="Tần suất quan trắc theo khách hàng" icon={CalendarDays}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {CUSTOMERS.map((c) => (
+            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 220, fontSize: 12.5, fontWeight: 600, flexShrink: 0 }}>{c.name}</div>
+              <div style={{ flex: 1, height: 6, background: "var(--surface-alt)", borderRadius: 4, position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "35%", background: "var(--primary)", borderRadius: 4 }} />
+              </div>
+              <span className="badge" style={{ background: "var(--blue-soft)", color: "var(--blue)", flexShrink: 0 }}>{c.freq}</span>
+              <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-faint)", width: 90, flexShrink: 0, textAlign: "right" }}>{c.nextVisit}</span>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+      <SectionCard title="Hợp đồng theo khách hàng" icon={FileText} style={{ padding: 0 }}>
+        <div className="lims-scroll" style={{ overflowX: "auto" }}>
+          <table className="lims-table">
+            <thead><tr><th>Khách hàng</th><th>Số hợp đồng đang hiệu lực</th><th>Tần suất</th><th>Lịch quan trắc tiếp theo</th></tr></thead>
+            <tbody>
+              {CUSTOMERS.map((c) => (
+                <tr key={c.id}>
+                  <td style={{ fontWeight: 600 }}>{c.name}</td>
+                  <td>{CONTRACTS.filter((k) => k.customerId === c.id).length}</td>
+                  <td>{c.freq}</td>
+                  <td className="mono">{c.nextVisit}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -3026,11 +4127,11 @@ const NguoiDungPage = () => (
             <thead><tr><th>Nhân viên</th><th>Vai trò</th><th>Trạng thái</th></tr></thead>
             <tbody>
               {[
-                ["Acc Admin", "Quản trị hệ thống"],
+                ["Acc Quản lý", "Quản lý — mọi thứ trừ Duyệt cuối"],
                 ["Acc KNV 1", "Kiểm Nghiệm viên"],
                 ["Acc KNV 2", "Kiểm Nghiệm viên"],
                 ["Acc KNV 3", "Kiểm Nghiệm viên"],
-                ["Acc Trưởng phòng", "Trưởng phòng Lab"],
+                ["Acc Trưởng phòng", "Trưởng phòng Lab — toàn quyền + Duyệt"],
               ].map(([n, r]) => (
                 <tr key={n}><td style={{ fontWeight: 600 }}>{n}</td><td>{r}</td><td><span className="badge" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}>Đang hoạt động</span></td></tr>
               ))}
@@ -3054,16 +4155,12 @@ export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [page, setPage] = useState("banLamViec");
   const [role, setRole] = useState("B");
+  // BATCHES nâng lên state gốc, dùng chung xuyên suốt luồng Nhập KQ → Tổng hợp → Duyệt
+  const [batches, setBatches] = useState(BATCHES);
 
   if (!loggedIn) return <LoginScreen onLogin={(r) => { setRole(r); setLoggedIn(true); }} />;
 
-  const ALLOWED_PAGES_A = new Set([
-    "banLamViec", "tongQuanLab",
-    "khachHang", "baoGia", "hopDong",
-    "nhapKQ",
-    "danhMucA", "nhaThauPhu",
-  ]);
-  const effectivePage = role === "A" && !ALLOWED_PAGES_A.has(page) ? "banLamViec" : page;
+  const effectivePage = canAccess(page, role) ? page : firstAllowedPage(role);
 
   const pages = {
     banLamViec: <BanLamViecPage setPage={setPage} />,
@@ -3071,16 +4168,17 @@ export default function App() {
     khachHang: <KhachHangPage role={role} />,
     baoGia: <BaoGiaPage role={role} setPage={setPage} />,
     hopDong: <HopDongPage />,
-    maHoaMau: <MaHoaMauPage />,
+    TaoPhieuYCKN: <TaoPhieuYCKNPage role={role} setPage={setPage} />,
     yeuCauTN: <YeuCauThuNghiemPage />,
     phanCong: <PhanCongPage role={role} />,
     meThuNghiem: <MeThuNghiemPage />,
-    nhapKQ: <NhapKetQuaPage role={role} />,
-    duyetPhieu: <DuyetPhieuPage role={role} />,
-    ketQuaThuNghiem: <KetQuaThuNghiemPage />,
+    nhapKQ: <NhapKetQuaPage role={role} batches={batches} setBatches={setBatches} />,
+    tongHopPhieu: <TongHopPhieuPage batches={batches} setBatches={setBatches} />,
+    duyetPhieu: <DuyetPhieuPage role={role} batches={batches} setBatches={setBatches} />,
+    ketQuaThuNghiem: <KetQuaThuNghiemPage batches={batches} />,
     tkKinhDoanh: <TkKinhDoanhPage />,
     tkNangSuat: <TkNangSuatPage />,
-    tkKyThuat: <TkKyThuatPage />,
+    tkKyThuat: <TkKyThuatPage batches={batches} />,
     danhMucA: <DanhMucAPage />,
     nhaThauPhu: <NhaThauPhuPage />,
     thietBi: <ThietBiPage />,
