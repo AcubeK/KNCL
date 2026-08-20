@@ -3,7 +3,7 @@ import {
   Home, Users, ClipboardList, HelpCircle, BarChart3, Settings, FlaskConical,
   Search, Download, Plus, Bell, ChevronRight, ChevronDown, X, Clock,
   AlertTriangle, CheckCircle2, XCircle, LogOut, Phone, MapPin, FileText,
-  Eye, Pencil, Trash2, Gauge, Wrench, ShieldCheck, Building2, ListFilter,
+  Eye, Pencil, Trash2, Gauge, ShieldCheck, Building2, ListFilter,
   CalendarDays, ArrowUpRight, UserCircle2, Lock, Mail, QrCode, Printer,
   FileCheck2, PenLine, PackageCheck, Split, Paperclip, ScanLine, TrendingUp,
   ClipboardCheck, ArrowRightLeft,  Info,
@@ -216,7 +216,16 @@ const REQUESTS = [
   { code: "YC-0227", kh: "Công ty CP Thép Việt Ý", loai: "Quan trắc khí thải", ngay: "01/08/2026", status: "Đang xử lý" },
 ];
 
-const SAMPLE_TYPES = ["Nước mặt", "Nước ngầm", "Nước sạch", "Nước thải", "Không khí xung quanh", "Khí thải", "Đất"];
+const SAMPLE_TYPE_DEFS = [
+  { code: "NM", name: "Nước mặt" },
+  { code: "NN", name: "Nước ngầm" },
+  { code: "NS", name: "Nước sạch" },
+  { code: "NT", name: "Nước thải" },
+  { code: "KK", name: "Không khí xung quanh" },
+  { code: "KT", name: "Khí thải" },
+  { code: "DAT", name: "Đất" },
+];
+const SAMPLE_TYPES = SAMPLE_TYPE_DEFS.map(t => t.name);
 
 // Dữ liệu danh sách Nhà thầu phụ
 const SUBCONTRACTORS = [
@@ -262,9 +271,10 @@ const INDICATORS = [
     lod: "0.1 µg/kg",
     limit: "KPH",
     qcvn: "QCVN 01-189:2019/BNNPTNT",
-    price: 1200000,
+    price: 1200000, // giá bán cho khách hàng
     assignee: "Trung tâm Kiểm nghiệm Eurofins",
     isSubcontract: true,
+    subPrices: { "Trung tâm Kiểm nghiệm Eurofins": 950000 }, // MỚI — giá vốn trả cho nhà thầu phụ
     sampleTypes: ["Nước thải", "Đất"],
   },
   {
@@ -308,6 +318,18 @@ const INDICATORS = [
   },
 ];
 
+const CUSTOMER_PARAMETER_PRICES = {
+  "KH-0001": { "IND-01": 130000, "IND-02": 300000 }, // Giấy Bãi Bằng có giá ưu đãi
+  "KH-0019": { "IND-04": 950000 }, // Samsung — hợp đồng khung giá riêng cho kim loại nặng
+};
+
+const getIndicatorPrice = (indicatorCode, customerId) => {
+  const ind = INDICATORS.find((i) => i.code === indicatorCode);
+  if (!ind) return 0;
+  const override = CUSTOMER_PARAMETER_PRICES[customerId]?.[indicatorCode];
+  return override ?? ind.price;
+};
+
 // Mã ký hiệu viết tắt theo loại mẫu — dùng để sinh "Ký hiệu mẫu" (VD: NT-01, KK-01)
 const SAMPLE_TYPE_ABBR = {
   "Nước mặt": "NM", "Nước ngầm": "NN", "Nước sạch": "NS", "Nước thải": "NT",
@@ -323,13 +345,13 @@ const YCKN_CODE = {
 };
 
 const BATCHES = [
-  { sample: "SAM-202608-001", kyHieu: "260805.01/01", order: "DH-2608-001", indicator: "COD", method: "SMEWW 5220C", lodloq: "4 mg/L", unit: "mg/L", limit: "≤ 150", qcvn: "QCVN 40:2011/BTNMT", tech: "Acc KNV 1", thietBi: "Máy đo COD - COD-01", status: "TESTING", result: "", note: "" },
-  { sample: "SAM-202608-001", kyHieu: "260805.01/01", order: "DH-2608-001", indicator: "BOD5", method: "TCVN 6001-1:2008", lodloq: "2 mg/L", unit: "mg/L", limit: "≤ 50", qcvn: "QCVN 40:2011/BTNMT", tech: "Acc KNV 2", thietBi: "Tủ ấm BOD - BOD-02", status: "PENDING_APPROVAL", result: "38", note: "Đạt" },
-  { sample: "SAM-202608-001", kyHieu: "260805.01/02", order: "DH-2608-001", indicator: "pH", method: "TCVN 6492:2011", lodloq: "-", unit: "-", limit: "5.5 - 9", qcvn: "QCVN 40:2011/BTNMT", tech: "Acc KNV 2", thietBi: "Máy đo pH cầm tay", status: "APPROVED_COMPLETED", result: "7.2", note: "" },
-  { sample: "SAM-202608-003", kyHieu: "260801.01/01", order: "DH-2608-003", indicator: "Tổng Nitơ", method: "TCVN 6638:2000", lodloq: "0.5 mg/L", unit: "mg/L", limit: "≤ 40", qcvn: "QCVN 19:2009/BTNMT", tech: "Acc Trưởng phòng", thietBi: "Máy phân tích N - N-01", status: "APPROVED_COMPLETED", result: "22", note: "" },
-  { sample: "SAM-202608-006", kyHieu: "260730.01/01", order: "DH-2608-006", indicator: "Kim loại nặng (Pb)", method: "SMEWW 3111B", lodloq: "0.01 mg/L", unit: "mg/L", limit: "≤ 0.5", qcvn: "QCVN 05:2023/BTNMT", tech: "Acc KNV 1", thietBi: "Máy AAS", status: "REJECTED", result: "0.61", note: "Vượt ngưỡng, đề nghị làm lại" },
-  { sample: "SAM-202608-006", kyHieu: "260730.01/02", order: "DH-2608-006", indicator: "Coliform tổng số", method: "TCVN 6187-2:1996", lodloq: "3 MPN/100mL", unit: "MPN/100mL", limit: "≤ 5000", qcvn: "QCVN 08:2023/BTNMT", tech: "Acc KNV 2", thietBi: "Tủ ủ vi sinh", status: "PENDING_APPROVAL", result: "1800", note: "Đạt" },
-  { sample: "SAM-202608-008", kyHieu: "260810.01/01", order: "DH-2608-008", indicator: "COD", method: "SMEWW 5220C", lodloq: "4 mg/L", unit: "mg/L", limit: "≤ 150", qcvn: "QCVN 08:2023/BTNMT", tech: "Acc KNV 3", thietBi: "Máy đo COD - COD-01", status: "ASSIGNED", result: "", note: "" },
+  { sample: "SAM-202608-001", kyHieu: "260805.01/01", order: "DH-2608-001", assignmentNo: "GV-260805.01", indicator: "COD", method: "SMEWW 5220C", lodloq: "4 mg/L", unit: "mg/L", limit: "≤ 150", qcvn: "QCVN 40:2011/BTNMT", tech: "Acc KNV 1", thietBi: "Máy đo COD - COD-01", status: "TESTING", result: "", note: "" },
+  { sample: "SAM-202608-001", kyHieu: "260805.01/01", order: "DH-2608-001", assignmentNo: "GV-260805.01", indicator: "BOD5", method: "TCVN 6001-1:2008", lodloq: "2 mg/L", unit: "mg/L", limit: "≤ 50", qcvn: "QCVN 40:2011/BTNMT", tech: "Acc KNV 2", thietBi: "Tủ ấm BOD - BOD-02", status: "PENDING_APPROVAL", result: "38", note: "Đạt" },
+  { sample: "SAM-202608-001", kyHieu: "260805.01/02", order: "DH-2608-001", assignmentNo: "GV-260805.01", indicator: "pH", method: "TCVN 6492:2011", lodloq: "-", unit: "-", limit: "5.5 - 9", qcvn: "QCVN 40:2011/BTNMT", tech: "Acc KNV 2", thietBi: "Máy đo pH cầm tay", status: "APPROVED_COMPLETED", result: "7.2", note: "" },
+  { sample: "SAM-202608-003", kyHieu: "260801.01/01", order: "DH-2608-003", assignmentNo: "GV-260801.01", indicator: "Tổng Nitơ", method: "TCVN 6638:2000", lodloq: "0.5 mg/L", unit: "mg/L", limit: "≤ 40", qcvn: "QCVN 19:2009/BTNMT", tech: "Acc Trưởng phòng", thietBi: "Máy phân tích N - N-01", status: "APPROVED_COMPLETED", result: "22", note: "" },
+  { sample: "SAM-202608-006", kyHieu: "260730.01/01", order: "DH-2608-006", assignmentNo: "GV-260730.01", indicator: "Kim loại nặng (Pb)", method: "SMEWW 3111B", lodloq: "0.01 mg/L", unit: "mg/L", limit: "≤ 0.5", qcvn: "QCVN 05:2023/BTNMT", tech: "Acc KNV 1", thietBi: "Máy AAS", status: "REJECTED", result: "0.61", note: "Vượt ngưỡng, đề nghị làm lại" },
+  { sample: "SAM-202608-006", kyHieu: "260730.01/02", order: "DH-2608-006", assignmentNo: "GV-260730.01", indicator: "Coliform tổng số", method: "TCVN 6187-2:1996", lodloq: "3 MPN/100mL", unit: "MPN/100mL", limit: "≤ 5000", qcvn: "QCVN 08:2023/BTNMT", tech: "Acc KNV 2", thietBi: "Tủ ủ vi sinh", status: "PENDING_APPROVAL", result: "1800", note: "Đạt" },
+  { sample: "SAM-202608-008", kyHieu: "260810.01/01", order: "DH-2608-008", assignmentNo: "GV-260810.01", indicator: "COD", method: "SMEWW 5220C", lodloq: "4 mg/L", unit: "mg/L", limit: "≤ 150", qcvn: "QCVN 08:2023/BTNMT", tech: "Acc KNV 3", thietBi: "Máy đo COD - COD-01", status: "ASSIGNED", result: "", note: "" },
 ];
 const BATCH_STATUS = {
   ASSIGNED: { label: "Đã phân công", bg: "var(--blue-soft)", fg: "var(--blue)" },
@@ -339,6 +361,52 @@ const BATCH_STATUS = {
   REJECTED: { label: "Yêu cầu làm lại", bg: "var(--red-soft)", fg: "var(--red)" },
   APPROVED_COMPLETED: { label: "Đã duyệt", bg: "var(--primary-soft)", fg: "var(--primary-dark)" },
 };
+
+// Header của Phiếu giao việc — dùng chung cho toàn bộ chỉ tiêu thuộc 1 Phiếu YCKN
+const WORK_ASSIGNMENTS = {
+  "DH-2608-001": {
+    assignmentNo: "GV-260805.01",
+    deliveryDate: "05/08/2026",
+    delivererType: "INTERNAL",
+    delivererName: "Acc Quản lý",
+    delivererContact: "",
+    notes: "Mẫu bảo quản lạnh, ưu tiên phân tích COD trước.",
+  },
+  "DH-2608-003": {
+    assignmentNo: "GV-260801.01",
+    deliveryDate: "01/08/2026",
+    delivererType: "EXTERNAL",
+    delivererName: "Anh Tuấn - Lái xe Nhiệt điện Phả Lại",
+    delivererContact: "0912 345 678",
+    notes: "",
+  },
+  "DH-2608-006": {
+    assignmentNo: "GV-260730.01",
+    deliveryDate: "30/07/2026",
+    delivererType: "INTERNAL",
+    delivererName: "Acc KNV 1",
+    delivererContact: "",
+    notes: "",
+  },
+    "DH-2608-008": {
+    assignmentNo: "GV-260810.01",
+    deliveryDate: "10/08/2026",
+    delivererType: "EXTERNAL",
+    delivererName: "Chị Hạnh - Nhân viên KT Sông Đà",
+    delivererContact: "0987 654 321",
+    notes: "",
+  },
+
+  
+};
+
+// Hàm tra cứu — đặt sau khối WORK_ASSIGNMENTS
+const getAssignmentByOrder = (orderNo) => WORK_ASSIGNMENTS[orderNo] || null;
+
+const delivererLabel = (a) =>
+  !a ? "—" : a.delivererType === "INTERNAL"
+    ? a.delivererName
+    : `${a.delivererName}${a.delivererContact ? ` (${a.delivererContact})` : ""} · Ngoài hệ thống`;
 // Thứ tự luồng xử lý kết quả — dùng để vẽ tiến trình trực quan
 const RESULT_FLOW = ["ASSIGNED", "TESTING", "PENDING_APPROVAL", "PENDING_HEAD_APPROVAL", "APPROVED_COMPLETED"];
 const RESULT_FLOW_LABELS = ["Phân công", "Thử nghiệm", "KNV nộp KQ", "Quản lý tổng hợp", "Trưởng phòng duyệt"];
@@ -348,18 +416,17 @@ const ROLES = [
   { key: "B", label: "Quản lý", name: "Acc Quản lý", icon: Users },
   { key: "C", label: "Trưởng phòng / Duyệt", name: "Acc Trưởng phòng", icon: ShieldCheck },
 ];
-const EQUIPMENT_LIST = ["Máy đo COD - COD-01", "Tủ ấm BOD - BOD-02", "Máy đo pH cầm tay", "Máy phân tích N - N-01", "Máy AAS", "Tủ ủ vi sinh"];
 
 const QUOTES = [
-  { code: "BG-0088", kh: "Công ty CP Giấy Bãi Bằng", ngay: "28/07/2026", freq: "3 tháng / lần", items: [
+  { code: "BG-0088", kh: "Công ty CP Giấy Bãi Bằng", customerId: "KH-0001", ngay: "28/07/2026", freq: "3 tháng / lần", items: [
     { code: "IND-01", sampleType: "Nước thải", qty: 2 },
     { code: "IND-02", sampleType: "Nước thải", qty: 2 },
   ], status: "Đã chuyển đơn hàng" },
-  { code: "BG-0089", kh: "Bệnh viện Đa khoa Tỉnh Bắc Giang", ngay: "02/08/2026", freq: "Hàng năm", items: [
+  { code: "BG-0089", kh: "Bệnh viện Đa khoa Tỉnh Bắc Giang", customerId: "KH-0007", ngay: "02/08/2026", freq: "Hàng năm", items: [
     { code: "IND-01", sampleType: "Nước sạch", qty: 1 },
     { code: "IND-05", sampleType: "Nước sạch", qty: 1 },
   ], status: "Đã gửi khách hàng" },
-  { code: "BG-0090", kh: "KCN Tân Đức", ngay: "04/08/2026", freq: "Hàng tháng", items: [
+  { code: "BG-0090", kh: "KCN Tân Đức", customerId: "KH-0003", ngay: "04/08/2026", freq: "Hàng tháng", items: [
     { code: "IND-02", sampleType: "Nước thải", qty: 1 },
     { code: "IND-04", sampleType: "Nước thải", qty: 1 },
   ], status: "Nháp" },
@@ -369,14 +436,15 @@ const QUOTES = [
 // Mỗi đơn hàng có nhiều "Mục" (nhóm theo loại mẫu), mỗi Mục có nhiều mẫu
 const TEST_REQUESTS = {
   "DH-2608-001": {
-    kh: "Công ty CP Giấy Bãi Bằng",
-    groups: [
-      {
-        title: "Mục I: Nước thải",
-        type: "Nước thải",
-        samples: [
-          { stt: 1, ten: "Nước thải đầu ra hố ga số 1", luong: "2 lít", tinhTrang: "Đạt yêu cầu", chiTieu: ["pH trong nước", "COD (Nhu cầu Oxi Hóa học)"] },
-          { stt: 2, ten: "Nước thải đầu ra hố ga số 2", luong: "2 lít", tinhTrang: "Đạt yêu cầu", chiTieu: ["COD (Nhu cầu Oxi Hóa học)"] },
+  kh: "Công ty CP Giấy Bãi Bằng",
+  diaDiemLayMau: "Nhà máy Giấy Bãi Bằng, Phù Ninh, Phú Thọ", // MỚI
+  groups: [
+    {
+      title: "Mục I: Nước thải",
+      type: "Nước thải",
+      samples: [
+        { stt: 1, ten: "Nước thải đầu ra hố ga số 1", viTriLayMau: "Hố ga số 1, khu xử lý nước thải", ngayHenTra: "12/08/2026", luong: "2 lít", tinhTrang: "Đạt yêu cầu", chiTieu: ["pH trong nước", "COD (Nhu cầu Oxi Hóa học)"] },
+        { stt: 2, ten: "Nước thải đầu ra hố ga số 2", luong: "2 lít", tinhTrang: "Đạt yêu cầu", chiTieu: ["COD (Nhu cầu Oxi Hóa học)"] },
         ],
       },
       {
@@ -430,10 +498,7 @@ const PERSONAL_TASKS = [
 ];
 
 const OVERDUE_ORDERS = ORDERS.filter((o) => ["Tiếp nhận", "Đang phân tích"].includes(o.status)).slice(0, 3);
-const EQUIPMENT_OVERDUE = [
-  { name: "Máy quang phổ hấp thụ nguyên tử (AAS)", due: "02/08/2026", days: 4 },
-  { name: "Tủ ấm BOD", due: "05/08/2026", days: 1 },
-];
+
 const UPCOMING_RETURN = ORDERS.filter((o) => o.status === "Trả kết quả" || o.status === "Đang phân tích").slice(0, 4);
 const TODAY_TASKS = [
   "Nhận mẫu từ KCN Tân Đức — 08:30",
@@ -471,6 +536,15 @@ const TECH_PRODUCTIVITY = TECHNICIANS.map((t) => ({
   giao: BATCHES.filter((b) => b.tech === t).length + 6,
   hoanThanh: BATCHES.filter((b) => b.tech === t && b.status === "APPROVED_COMPLETED").length + 5,
 }));
+// Số mẫu theo nền mẫu (loại mẫu) theo từng tháng — dữ liệu demo
+const SAMPLES_BY_MATRIX_MONTH = [
+  { month: "T3", "Nước mặt": 8, "Nước ngầm": 4, "Nước sạch": 10, "Nước thải": 14, "Không khí xung quanh": 3, "Khí thải": 2, "Đất": 1 },
+  { month: "T4", "Nước mặt": 6, "Nước ngầm": 5, "Nước sạch": 12, "Nước thải": 16, "Không khí xung quanh": 4, "Khí thải": 2, "Đất": 2 },
+  { month: "T5", "Nước mặt": 9, "Nước ngầm": 3, "Nước sạch": 11, "Nước thải": 15, "Không khí xung quanh": 5, "Khí thải": 3, "Đất": 1 },
+  { month: "T6", "Nước mặt": 7, "Nước ngầm": 6, "Nước sạch": 13, "Nước thải": 17, "Không khí xung quanh": 4, "Khí thải": 2, "Đất": 2 },
+  { month: "T7", "Nước mặt": 10, "Nước ngầm": 4, "Nước sạch": 14, "Nước thải": 19, "Không khí xung quanh": 6, "Khí thải": 3, "Đất": 3 },
+  { month: "T8", "Nước mặt": 5, "Nước ngầm": 2, "Nước sạch": 8, "Nước thải": 11, "Không khí xung quanh": 3, "Khí thải": 1, "Đất": 1 },
+];
 const SAMPLE_TEST_STATUS = ["Chưa kiểm nghiệm", "Đang kiểm nghiệm", "Đã kiểm nghiệm", "Cần xem xét lại"];
 const testStatusStyle = {
   "Chưa kiểm nghiệm": { bg: "var(--gray-soft)", fg: "#5B6659" },
@@ -488,8 +562,8 @@ const PAGE_ROLES = {
   banLamViec: ["A", "B", "C"],
   tongQuanLab: ["A", "B", "C"],
   khachHang: ["A", "B", "C"],
-  baoGia: ["A", "B", "C"],
-  hopDong: ["A", "B", "C"],
+  baoGia: ["B", "C"],              // đổi: bỏ "A"
+  hopDong: ["B", "C"],             // đổi: bỏ "A"
   TaoPhieuYCKN: ["B", "C"],
   yeuCauTN: ["B", "C"],
   phanCong: ["B", "C"],
@@ -497,17 +571,21 @@ const PAGE_ROLES = {
   nhapKQ: ["A", "B", "C"],
   tongHopPhieu: ["B", "C"],
   duyetPhieu: ["C"],
-  ketQuaThuNghiem: ["A", "B", "C"],
+  ketQuaThuNghiem: ["B", "C"],     // đổi: bỏ "A"
   tkKinhDoanh: ["B", "C"],
   tkNangSuat: ["B", "C"],
   tkKyThuat: ["B", "C"],
+  tkNenMau: ["B", "C"],
   danhMucA: ["A", "B", "C"],
-  nhaThauPhu: ["A", "B", "C"],
-  thietBi: ["B", "C"],
+  nhaThauPhu: ["B", "C"],          // đổi: bỏ "A"
+  loaiMau: ["B", "C"],             // mới — xem mục 2
   nguoiDung: ["B", "C"],
 };
 const canAccess = (page, role) => PAGE_ROLES[page]?.includes(role);
 const firstAllowedPage = (role) => Object.keys(PAGE_ROLES).find((p) => canAccess(p, role)) || "banLamViec";
+// Trưởng phòng chỉ được TÁC ĐỘNG (thêm/sửa/xóa) ở 2 trang này — các trang khác chỉ xem
+const EDITABLE_PAGES_FOR_C = ["duyetPhieu", "nguoiDung"];
+const canEditData = (role, page) => role === "B" || (role === "C" && EDITABLE_PAGES_FOR_C.includes(page));
 
 /* ============================================================
    SMALL COMPONENTS
@@ -552,9 +630,9 @@ const Toolbar = ({ search, setSearch, placeholder, filterLabel, filterOptions, f
 
 const RowActions = ({ onView, onEdit, onDelete }) => (
   <div style={{ display: "flex", gap: 6 }}>
-    <button className="lims-btn-icon" onClick={onView} title="Xem"><Eye size={14} /></button>
-    <button className="lims-btn-icon" onClick={onEdit} title="Sửa"><Pencil size={14} /></button>
-    <button className="lims-btn-icon" onClick={onDelete} title="Xóa"><Trash2 size={14} /></button>
+    {onView && <button className="lims-btn-icon" onClick={onView} title="Xem"><Eye size={14} /></button>}
+    {onEdit && <button className="lims-btn-icon" onClick={onEdit} title="Sửa"><Pencil size={14} /></button>}
+    {onDelete && <button className="lims-btn-icon" onClick={onDelete} title="Xóa"><Trash2 size={14} /></button>}
   </div>
 );
 
@@ -724,14 +802,15 @@ const NAV_GROUPS = [
       { key: "tkNangSuat", label: "Thống kê Năng suất & Tiến độ Lab" },
       { key: "tkKyThuat", label: "Thống kê Kỹ thuật" },
       { key: "hopDong", label: "Hợp đồng & Tần suất" },
+      { key: "tkNenMau", label: "Thống kê theo Nền mẫu" },
     ],
   },
   {
     key: "heThong", label: "7. Cấu hình & Hệ thống", icon: Settings,
     children: [
       { key: "danhMucA", label: "Danh mục chỉ tiêu" },
+      { key: "loaiMau", label: "Loại mẫu" },
       { key: "nhaThauPhu", label: "Nhà thầu phụ" },
-      { key: "thietBi", label: "Thiết bị & Hiệu chuẩn" },
       { key: "nguoiDung", label: "Người dùng & Phòng ban" },
     ],
   },
@@ -826,6 +905,13 @@ const BanLamViecPage = ({ setPage }) => {
   const [tab, setTab] = useState("banTin");
   const [showAddScheduleModal, setShowAddScheduleModal] = useState(false);
   const [selectedTechs, setSelectedTechs] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+const [isOpen, setIsOpen] = useState(false);
+
+// Hàm lọc danh sách theo từ khóa
+const filteredTechs = TECHNICIANS.filter((tech) =>
+  tech.toLowerCase().includes(searchTerm.toLowerCase())
+);
   const toggleTech = (tech) => {
     setSelectedTechs((prev) =>
     prev.includes(tech) ? prev.filter((t) => t !== tech) : [...prev, tech]
@@ -975,39 +1061,130 @@ const BanLamViecPage = ({ setPage }) => {
                 <input className="lims-input" type="time" defaultValue="08:30" style={{ width: "100%", padding: "8px 10px" }} />
               </div>
 
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 6 }}>
-                  Nhân sự Tham gia
-                </label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {TECHNICIANS.map((tech, idx) => {
-                    const isSelected = selectedTechs.includes(tech);
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => toggleTech(tech)}
-                        style={{
-                          padding: "6px 12px",
-                          borderRadius: 16,
-                          border: isSelected ? "1.5px solid var(--primary)" : "1px solid var(--line)",
-                          background: isSelected ? "var(--primary-soft, #E6F4F1)" : "var(--surface)",
-                          color: isSelected ? "var(--primary-dark)" : "var(--ink-soft)",
-                          fontSize: 12,
-                          fontWeight: isSelected ? 600 : 400,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 4,
-                          transition: "all 0.15s ease"
-                        }}
-                      >
-                        {isSelected ? "✓" : "+"} {tech}
-                      </button>
-                    );
-                  })}
-                </div>
+              <div style={{ position: "relative" }}>
+  <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 6 }}>
+    Nhân sự Tham gia
+  </label>
+
+  {/* Backdrop ẩn dropdown khi click ra ngoài */}
+  {isOpen && (
+    <div
+      onClick={() => setIsOpen(false)}
+      style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9 }}
+    />
+  )}
+
+  {/* Ô Nhập liệu Tìm kiếm */}
+  <div style={{ position: "relative", zIndex: 10 }}>
+    <input
+      type="text"
+      placeholder="Tìm và chọn nhân sự..."
+      value={searchTerm}
+      onFocus={() => setIsOpen(true)}
+      onChange={(e) => {
+        setSearchTerm(e.target.value);
+        setIsOpen(true);
+      }}
+      style={{
+        width: "100%",
+        padding: "8px 12px",
+        borderRadius: 8,
+        border: "1px solid var(--line)",
+        fontSize: 13,
+        outline: "none",
+        boxSizing: "border-box",
+        background: "var(--surface, #fff)"
+      }}
+    />
+
+    {/* Dropdown Menu xổ xuống */}
+    {isOpen && (
+      <div
+        style={{
+          position: "absolute",
+          top: "100%",
+          left: 0,
+          right: 0,
+          marginTop: 4,
+          maxHeight: 200,
+          overflowY: "auto",
+          background: "var(--surface, #ffffff)",
+          border: "1px solid var(--line)",
+          borderRadius: 8,
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+          zIndex: 11
+        }}
+      >
+        {filteredTechs.length > 0 ? (
+          filteredTechs.map((tech, idx) => {
+            const isSelected = selectedTechs.includes(tech);
+            return (
+              <div
+                key={idx}
+                onClick={() => toggleTech(tech)}
+                style={{
+                  padding: "8px 12px",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: isSelected ? "var(--primary-soft, #E6F4F1)" : "transparent",
+                  color: isSelected ? "var(--primary-dark)" : "var(--ink-soft)",
+                  fontWeight: isSelected ? 600 : 400,
+                  transition: "background 0.15s ease"
+                }}
+              >
+                <span>{tech}</span>
+                <span>{isSelected ? "✓" : "+"}</span>
               </div>
+            );
+          })
+        ) : (
+          <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--ink-soft)", textAlign: "center" }}>
+            Không tìm thấy nhân sự
+          </div>
+        )}
+      </div>
+    )}
+  </div>
+
+  {/* Danh sách nhân sự ĐÃ CHỌN dạng Chip bên dưới */}
+  {selectedTechs.length > 0 && (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ fontSize: 11, color: "var(--ink-soft)", marginBottom: 6 }}>
+        Đã chọn ({selectedTechs.length}):
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {selectedTechs.map((tech, idx) => (
+          <span
+            key={idx}
+            style={{
+              padding: "4px 10px",
+              borderRadius: 16,
+              background: "var(--primary-soft, #E6F4F1)",
+              color: "var(--primary-dark)",
+              border: "1px solid var(--primary)",
+              fontSize: 12,
+              fontWeight: 500,
+              display: "flex",
+              alignItems: "center",
+              gap: 6
+            }}
+          >
+            {tech}
+            <span
+              onClick={() => toggleTech(tech)}
+              style={{ cursor: "pointer", fontWeight: "bold", fontSize: 13, lineHeight: 1 }}
+            >
+              ×
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )}
+</div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>Nội dung công tác</label>
@@ -1058,7 +1235,6 @@ const TongQuanLabPage = () => (
           { label: "Đơn hàng đang xử lý", value: ORDERS.filter((o) => !["Hoàn tất", "Hủy"].includes(o.status)).length, color: "var(--primary-dark)", bg: "var(--primary-soft)" },
           { label: "Chờ Quản lý tổng hợp", value: BATCHES.filter((b) => b.status === "PENDING_APPROVAL").length, color: "var(--violet)", bg: "var(--violet-soft)" },
           { label: "Chờ Trưởng phòng duyệt", value: BATCHES.filter((b) => b.status === "PENDING_HEAD_APPROVAL").length, color: "var(--blue)", bg: "var(--blue-soft)" },
-          { label: "Quá hạn (đơn + thiết bị)", value: OVERDUE_ORDERS.length + EQUIPMENT_OVERDUE.length, color: "var(--red)", bg: "var(--red-soft)" },
           { label: "Yêu cầu làm lại", value: BATCHES.filter((b) => b.status === "REJECTED").length, color: "var(--amber)", bg: "var(--amber-soft)" },
         ].map((k) => (
           <div key={k.label} style={{ background: k.bg, borderRadius: 10, padding: 16 }}>
@@ -1092,12 +1268,6 @@ const TongQuanLabPage = () => (
                 <AlertTriangle size={13} color="var(--red)" />
                 <SpecimenTag>{o.no}</SpecimenTag>
                 <span style={{ color: "var(--ink-soft)" }}>chậm trả kết quả — {o.kh}</span>
-              </div>
-            ))}
-            {EQUIPMENT_OVERDUE.map((e) => (
-              <div key={e.name} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
-                <Wrench size={13} color="var(--red)" />
-                <span>{e.name} — quá hạn hiệu chuẩn {e.days} ngày</span>
               </div>
             ))}
           </div>
@@ -1340,7 +1510,7 @@ const CustomerDetailModal = ({ c, onClose }) => (
   </Modal>
 );
 
-const KhachHangPage = ({ role }) => {
+const KhachHangPage = ({ role, canEdit }) => {
   const [customers, setCustomers] = useState(CUSTOMERS);
   const [search, setSearch] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -1443,8 +1613,8 @@ const KhachHangPage = ({ role }) => {
             </button>
             <div style={{ flex: 1 }} />
             <button className="lims-btn lims-btn-ghost"><Download size={14} /> Xuất Excel</button>
-            {(role === "B" || role === "C") && (
-              <button className="lims-btn lims-btn-primary" onClick={() => setFormModal({ mode: "add" })}>
+            {canEdit && (
+            <button className="lims-btn lims-btn-primary" onClick={() => setFormModal({ mode: "add" })}>
                 <Plus size={14} /> Thêm khách hàng
               </button>
             )}
@@ -1518,8 +1688,7 @@ const KhachHangPage = ({ role }) => {
                         <td style={{ color: "var(--ink-soft)" }}><MapPin size={11} style={{ marginRight: 4, verticalAlign: -1 }} />{c.address}</td>
                         <td style={{ textAlign: "center" }}><span className="badge" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}>{custContracts.length} hợp đồng</span></td>
                         <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
-                          <RowActions onView={() => setViewing(c)} onEdit={role !== "A" ? () => setFormModal({ mode: "edit", data: c }) : undefined} onDelete={role === "B" || role === "C" ? () => deleteCustomer(c.id) : undefined} />
-                        </td>
+<RowActions onView={() => setViewing(c)} onEdit={canEdit ? () => setFormModal({ mode: "edit", data: c }) : undefined} onDelete={canEdit ? () => deleteCustomer(c.id) : undefined} />                        </td>
                       </tr>
 
                       {isOpen && (
@@ -1577,14 +1746,21 @@ const KhachHangPage = ({ role }) => {
    ============================================================ */
 const QUOTER_NAME = "Acc Quản lý";
 
-const quoteItemsWithData = (items) => items.map((it) => ({ ...it, ind: INDICATORS.find((i) => i.code === it.code) }));
-const quoteTotal = (items) => quoteItemsWithData(items).reduce((sum, it) => sum + (it.ind ? it.ind.price * it.qty : 0), 0);
+const quoteItemsWithData = (items, customerId) =>
+  items.map((it) => ({
+    ...it,
+    ind: INDICATORS.find((i) => i.code === it.code),
+    unitPrice: getIndicatorPrice(it.code, customerId),
+  }));
+const quoteTotal = (items, customerId) =>
+  quoteItemsWithData(items, customerId).reduce((sum, it) => sum + it.unitPrice * it.qty, 0);
 
 /* Printable "PHIẾU BÁO GIÁ" template — shown when exporting a quote to Excel */
 const QuotePrintModal = ({ quote, onClose }) => {
   const [nguoiBaoGia, setNguoiBaoGia] = useState(QUOTER_NAME);
-  const items = quoteItemsWithData(quote.items);
-  const total = quoteTotal(quote.items);
+  const items = quoteItemsWithData(quote.items, quote.customerId);
+  const total = quoteTotal(quote.items, quote.customerId);
+
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,30,25,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }} onClick={onClose}>
@@ -1619,8 +1795,8 @@ const QuotePrintModal = ({ quote, onClose }) => {
                     <td style={{ fontWeight: 600 }}>{it.ind ? `${it.ind.name} — ${it.sampleType}` : it.sampleType}</td>
                     <td className="mono">{it.ind ? it.ind.unit : "—"}</td>
                     <td className="mono">{it.qty}</td>
-                    <td className="mono">{it.ind ? it.ind.price.toLocaleString("vi-VN") + " đ" : "—"}</td>
-                    <td className="mono">{it.ind ? (it.ind.price * it.qty).toLocaleString("vi-VN") + " đ" : "—"}</td>
+                    <td className="mono">{it.ind ? it.unitPrice.toLocaleString("vi-VN") + " đ" : "—"}</td>
+                    <td className="mono">{it.ind ? (it.unitPrice * it.qty).toLocaleString("vi-VN") + " đ" : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1688,9 +1864,10 @@ const SearchableSelect = ({ value, onChange, options, getLabel, placeholder, wid
   );
 };
 
-const BaoGiaPage = ({ role, setPage }) => {
+const BaoGiaPage = ({ role, setPage, canEdit }) => {
   const [quotes, setQuotes] = useState(QUOTES);
-  const [customer, setCustomer] = useState(CUSTOMERS[0]?.name || "");
+  const [customerId, setCustomerId] = useState(CUSTOMERS[0]?.id || "");
+  const customer = CUSTOMERS.find((c) => c.id === customerId)?.name || "";
   const [freq, setFreq] = useState("Hàng quý (4 lần/năm)");
   
   // State quản lý danh sách chỉ tiêu chọn dạng checklist
@@ -1704,7 +1881,6 @@ const BaoGiaPage = ({ role, setPage }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
 
-  const canEdit = role === "B" || role === "C";
 
   // 1. Thao tác Toggle 1 chỉ tiêu
   const toggleIndicator = (sampleType, indicatorCode) => {
@@ -1767,10 +1943,10 @@ const BaoGiaPage = ({ role, setPage }) => {
   };
 
   // Tính tổng tiền từ selectedIndicators
-  const totalPrice = selectedIndicators.reduce((sum, r) => {
-    const ind = INDICATORS.find((i) => i.code === r.indicatorCode);
-    return sum + (ind ? ind.price * r.qty : 0);
-  }, 0);
+  const totalPrice = selectedIndicators.reduce(
+  (sum, r) => sum + getIndicatorPrice(r.indicatorCode, customerId) * r.qty,
+  0
+  );
 
   // Tạo báo giá mới từ selectedIndicators
   const createQuote = () => {
@@ -1781,6 +1957,7 @@ const BaoGiaPage = ({ role, setPage }) => {
       {
         code,
         kh: customer,
+        customerId, // MỚI — dùng để tra giá riêng theo khách hàng
         ngay: new Date().toLocaleDateString("vi-VN"),
         freq,
         items: selectedIndicators.map((r) => ({
@@ -1823,7 +2000,7 @@ const BaoGiaPage = ({ role, setPage }) => {
               </label>
               <SearchableSelect
                 value={customer}
-                onChange={(c) => setCustomer(c.name)}
+                onChange={(c) => setCustomerId(c.id)}
                 options={CUSTOMERS}
                 getLabel={(c) => `${c.name} — ${c.id}`}
                 placeholder="Gõ để tìm khách hàng..."
@@ -2469,6 +2646,23 @@ const CreatePhieuYCKNModal = ({ onClose, onCreate }) => {
   const [openSampleTypes, setOpenSampleTypes] = useState({});
   const [sampleRowsByType, setSampleRowsByType] = useState({});
   const [step, setStep] = useState(1);
+  const [diaDiemLayMau, setDiaDiemLayMau] = useState("");
+  const [meta, setMeta] = useState({
+    isEnglish: false,
+    stdComment: "",
+    totalFee: "",
+    advancePaid: "",
+    otherRequest: "",
+    requiresRetention: false,
+    subcontractAgreed: false,
+    requesterName: "",
+    sentDate: "",
+    receiverName: "",
+    receivedDate: "",
+  });
+const setMetaField = (field, val) => setMeta((m) => ({ ...m, [field]: val }));
+const balanceDue = (parseFloat(meta.totalFee) || 0) - (parseFloat(meta.advancePaid) || 0);
+  
 
   // Map cho tra cứu chỉ tiêu O(1)
   const indicatorMap = useMemo(() => new Map(INDICATORS.map((i) => [i.code, i])), []);
@@ -2598,6 +2792,8 @@ const CreatePhieuYCKNModal = ({ onClose, onCreate }) => {
           samples: rows.map((r, idx) => ({
             stt: idx + 1,
             ten: r.ten.trim(),
+            viTriLayMau: (r.viTriLayMau || "").trim(),
+            ngayHenTra: r.ngayHenTra || "",
             luong: r.luong.trim() || "-",
             tinhTrang: r.tinhTrang,
             chiTieu: r.chiTieu.map((code) => indicatorMap.get(code)?.name).filter(Boolean),
@@ -2611,6 +2807,8 @@ const CreatePhieuYCKNModal = ({ onClose, onCreate }) => {
     onCreate({
       kh: customer,
       orderName: orderName.trim() || `Kiểm nghiệm theo yêu cầu — ${customer}`,
+      diaDiemLayMau,
+      meta,
       groups,
     });
   };
@@ -2633,14 +2831,12 @@ const CreatePhieuYCKNModal = ({ onClose, onCreate }) => {
         onClick={(e) => e.stopPropagation()}
         className="lims-scroll"
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>Tạo phiếu YCKN trực tiếp</h3>
-            <p style={{ margin: "4px 0 0", fontSize: 12.5, color: "var(--ink-faint)" }}>
-              Không cần đi qua bước Báo giá — dùng khi khách hàng gửi mẫu / yêu cầu kiểm nghiệm trực tiếp.
-            </p>
-          </div>
-          <button className="lims-btn-icon" onClick={onClose}><X size={16} /></button>
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "12px 16px 0" }}>
+          {canEdit && (
+            <button className="lims-btn lims-btn-primary" onClick={() => setShowCreateModal(true)}>
+              <Plus size={14} /> Tạo phiếu YCKN trực tiếp
+            </button>
+          )}
         </div>
 
         {step === 1 && (
@@ -2670,6 +2866,15 @@ const CreatePhieuYCKNModal = ({ onClose, onCreate }) => {
                   onChange={(e) => setOrderName(e.target.value)}
                 />
               </div>
+            </div>
+
+            <div style={{ flex: "1 1 260px" }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>
+                Địa điểm lấy mẫu
+              </label>
+              <input className="lims-input" style={{ width: "100%" }}
+                placeholder="VD: Nhà máy X, Khu công nghiệp Y..."
+                value={diaDiemLayMau} onChange={(e) => setDiaDiemLayMau(e.target.value)} />
             </div>
 
             <div style={{ position: "relative", marginBottom: 14 }}>
@@ -2778,6 +2983,67 @@ const CreatePhieuYCKNModal = ({ onClose, onCreate }) => {
                 );
               })}
             </div>
+            <div style={{ border: "1px solid var(--line)", borderRadius: 8, padding: 14, marginBottom: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+  <span style={{ fontWeight: 700, fontSize: 13 }}>Thông tin bổ sung khi xuất phiếu</span>
+  <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5 }}>
+      <input type="checkbox" checked={meta.isEnglish} onChange={(e) => setMetaField("isEnglish", e.target.checked)} />
+      Phiếu kết quả bằng Tiếng Anh (bỏ chọn = Tiếng Việt)
+    </label>
+    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5 }}>
+      <input type="checkbox" checked={meta.requiresRetention} onChange={(e) => setMetaField("requiresRetention", e.target.checked)} />
+      Lưu mẫu theo quy định
+    </label>
+    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5 }}>
+      <input type="checkbox" checked={meta.subcontractAgreed} onChange={(e) => setMetaField("subcontractAgreed", e.target.checked)} />
+      KH đồng ý dùng nhà thầu phụ
+    </label>
+  </div>
+
+  <div>
+    <label style={{ fontSize: 11.5, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>Nhận xét kết quả theo tiêu chuẩn</label>
+    <input className="lims-input" style={{ width: "100%" }} value={meta.stdComment} onChange={(e) => setMetaField("stdComment", e.target.value)} />
+  </div>
+
+  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+    <div style={{ flex: "1 1 140px" }}>
+      <label style={{ fontSize: 11.5, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>Tổng chi phí</label>
+      <input className="lims-input" style={{ width: "100%" }} value={meta.totalFee} onChange={(e) => setMetaField("totalFee", e.target.value)} />
+    </div>
+    <div style={{ flex: "1 1 140px" }}>
+      <label style={{ fontSize: 11.5, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>Đã ứng trước</label>
+      <input className="lims-input" style={{ width: "100%" }} value={meta.advancePaid} onChange={(e) => setMetaField("advancePaid", e.target.value)} />
+    </div>
+    <div style={{ flex: "1 1 140px" }}>
+      <label style={{ fontSize: 11.5, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>Còn lại</label>
+      <input className="lims-input" style={{ width: "100%" }} value={balanceDue.toLocaleString("vi-VN")} disabled />
+    </div>
+  </div>
+
+  <div>
+    <label style={{ fontSize: 11.5, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>Yêu cầu khác</label>
+    <input className="lims-input" style={{ width: "100%" }} value={meta.otherRequest} onChange={(e) => setMetaField("otherRequest", e.target.value)} />
+  </div>
+
+  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+    <div style={{ flex: "1 1 200px" }}>
+      <label style={{ fontSize: 11.5, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>Người yêu cầu/gửi mẫu</label>
+      <input className="lims-input" style={{ width: "100%" }} value={meta.requesterName} onChange={(e) => setMetaField("requesterName", e.target.value)} />
+    </div>
+    <div style={{ flex: "1 1 140px" }}>
+      <label style={{ fontSize: 11.5, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>Ngày gửi mẫu</label>
+      <input className="lims-input" style={{ width: "100%" }} placeholder="dd/mm/yyyy" value={meta.sentDate} onChange={(e) => setMetaField("sentDate", e.target.value)} />
+    </div>
+    <div style={{ flex: "1 1 200px" }}>
+      <label style={{ fontSize: 11.5, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>Người tiếp nhận</label>
+      <input className="lims-input" style={{ width: "100%" }} value={meta.receiverName} onChange={(e) => setMetaField("receiverName", e.target.value)} />
+    </div>
+    <div style={{ flex: "1 1 140px" }}>
+      <label style={{ fontSize: 11.5, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>Ngày tiếp nhận</label>
+      <input className="lims-input" style={{ width: "100%" }} placeholder="dd/mm/yyyy" value={meta.receivedDate} onChange={(e) => setMetaField("receivedDate", e.target.value)} />
+    </div>
+  </div>
+</div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button className="lims-btn lims-btn-ghost" onClick={onClose}>Hủy</button>
@@ -2851,6 +3117,16 @@ const CreatePhieuYCKNModal = ({ onClose, onCreate }) => {
                               >
                                 {SAMPLE_TEST_STATUS.map((t) => <option key={t}>{t}</option>)}
                               </select>
+                            </div>
+                            <div style={{ flex: "1 1 180px" }}>
+                              <label style={{ fontSize: 11, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>Vị trí lấy mẫu</label>
+                              <input className="lims-input" style={{ width: "100%" }}
+                                value={r.viTriLayMau || ""} onChange={(e) => updateSampleRow(g.type, r.id, { viTriLayMau: e.target.value })} />
+                            </div>
+                            <div style={{ flex: "0 1 150px" }}>
+                              <label style={{ fontSize: 11, color: "var(--ink-faint)", display: "block", marginBottom: 3 }}>Ngày hẹn trả</label>
+                              <input className="lims-input" type="text" placeholder="dd/mm/yyyy" style={{ width: "100%" }}
+                                value={r.ngayHenTra || ""} onChange={(e) => updateSampleRow(g.type, r.id, { ngayHenTra: e.target.value })} />
                             </div>
                             {rows.length > 1 && (
                               <div style={{ display: "flex", alignItems: "flex-end" }}>
@@ -2928,22 +3204,19 @@ const CreatePhieuYCKNModal = ({ onClose, onCreate }) => {
 /* ============================================================
    TRANG CHÍNH — TaoPhieuYCKNPage
    ============================================================ */
-const TaoPhieuYCKNPage = ({ role, setPage }) => {
+const TaoPhieuYCKNPage = ({
+  role, setPage, canEdit,
+  manualOrders, setManualOrders,
+  manualRequests, setManualRequests,
+  manualYckn, setManualYckn,
+  manualAssignments, setManualAssignments,
+  allOrders, allTestRequests, allYcknCode,
+}) => {
   const [received, setReceived] = useState(
     () => new Set(Object.keys(TEST_REQUESTS).filter((no) => ORDERS.find((o) => o.no === no)?.status !== "Báo giá"))
   );
   const [expanded, setExpanded] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-
-  // Dữ liệu các phiếu tạo trực tiếp (không qua báo giá) — state cục bộ
-  const [manualRequests, setManualRequests] = useState({});
-  const [manualOrders, setManualOrders] = useState([]);
-  const [manualYckn, setManualYckn] = useState({});
-
-  // Gộp dữ liệu tĩnh (mock) với dữ liệu tạo trực tiếp để hiển thị thống nhất
-  const allTestRequests = { ...TEST_REQUESTS, ...manualRequests };
-  const allOrders = [...ORDERS, ...manualOrders];
-  const allYcknCode = { ...YCKN_CODE, ...manualYckn };
 
   const orderNos = Object.keys(allTestRequests);
   const pending = orderNos.filter((no) => !received.has(no));
@@ -2953,31 +3226,36 @@ const TaoPhieuYCKNPage = ({ role, setPage }) => {
 
   const flatten = (no) => flattenOrderSamples(no, allTestRequests, allYcknCode);
 
-  const handleCreateDirect = ({ kh, orderName, groups }) => {
-    const no = genOrderNo(allOrders);
-    const yckn = genYcknCode(allYcknCode);
+const handleCreateDirect = ({ kh, orderName, diaDiemLayMau, meta, groups }) => {
+  const no = genOrderNo(allOrders);
+  const yckn = genYcknCode(allYcknCode);
 
-    setManualOrders((prev) => [
-      ...prev,
-      {
-        no,
-        name: orderName,
-        type: "Mẫu gửi",
-        sampleCode: "",
-        ngayQT: new Date().toLocaleDateString("vi-VN"),
-        ngayTra: "",
-        kh,
-        donVi: "Tạo trực tiếp (không qua báo giá)",
-        status: "Tiếp nhận",
-      },
-    ]);
-    setManualRequests((prev) => ({ ...prev, [no]: { kh, groups } }));
-    setManualYckn((prev) => ({ ...prev, [no]: yckn }));
-    // Phiếu tạo trực tiếp coi như đã tiếp nhận ngay, bỏ qua bước "chờ tiếp nhận"
-    setReceived((prev) => new Set(prev).add(no));
-    setShowCreateModal(false);
-    setExpanded(no);
-  };
+  setManualOrders((prev) => [
+    ...prev,
+    {
+      no, name: orderName, type: "Mẫu gửi", sampleCode: "",
+      ngayQT: new Date().toLocaleDateString("vi-VN"), ngayTra: "",
+      kh, donVi: "Tạo trực tiếp (không qua báo giá)", status: "Tiếp nhận",
+    },
+  ]);
+  setManualRequests((prev) => ({ ...prev, [no]: { kh, diaDiemLayMau, meta, groups } }));
+
+  setManualYckn((prev) => ({ ...prev, [no]: yckn }));
+  setManualAssignments((prev) => ({
+    ...prev,
+    [no]: {
+      assignmentNo: `GV-${yckn}`,
+      deliveryDate: new Date().toLocaleDateString("vi-VN"),
+      delivererType: "INTERNAL",
+      delivererName: ROLES.find((r) => r.key === "B").name,
+      delivererContact: "",
+      notes: "Phiếu tạo trực tiếp — chưa qua báo giá.",
+    },
+  }));
+  setReceived((prev) => new Set(prev).add(no));
+  setShowCreateModal(false);
+  setExpanded(no);
+};
 
   return (
     <>
@@ -3006,8 +3284,11 @@ const TaoPhieuYCKNPage = ({ role, setPage }) => {
                       <td style={{ fontWeight: 600 }}>{o?.name}</td>
                       <td>{allTestRequests[no].kh}</td>
                       <td className="mono">{flat.length} mẫu con</td>
-                      <td><button className="lims-btn lims-btn-primary" style={{ padding: "5px 10px" }} onClick={() => createPhieu(no)}><FileText size={13} /> Tạo phiếu</button></td>
-                    </tr>
+<td>
+  {canEdit && (
+    <button className="lims-btn lims-btn-primary" style={{ padding: "5px 10px" }} onClick={() => createPhieu(no)}><FileText size={13} /> Tạo phiếu</button>
+  )}
+</td>                    </tr>
                   );
                 })}
               </tbody>
@@ -3082,14 +3363,15 @@ const TaoPhieuYCKNPage = ({ role, setPage }) => {
 /* ============================================================
    3. TIẾP NHẬN & PHÂN CÔNG — Yêu cầu thử nghiệm
    ============================================================ */
-const sampleCodeFor = (orderNo, stt) => `${YCKN_CODE[orderNo] || orderNo}/${String(stt).padStart(2, "0")}`;
-
-const TestRequestPrintModal = ({ orderNo, request, onClose }) => {
-  const flat = flattenOrderSamples(orderNo);
+const sampleCodeFor = (orderNo, stt, ycknCodes = YCKN_CODE) => `${ycknCodes[orderNo] || orderNo}/${String(stt).padStart(2, "0")}`;
+const genFinalReportCode = (orderNo, ycknCodes = YCKN_CODE) => `${ycknCodes[orderNo] || orderNo}/QC`;
+const TestRequestPrintModal = ({ orderNo, request, onClose, allTestRequests, allYcknCode }) => {
+  const flat = flattenOrderSamples(orderNo, allTestRequests, allYcknCode);
   const byGroup = {};
   flat.forEach((s) => { (byGroup[s.groupTitle] = byGroup[s.groupTitle] || []).push(s); });
 
   return (
+    
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,30,25,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 55, padding: 20 }} onClick={onClose}>
       <div className="lims-root" style={{ width: 760, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto", background: "var(--surface)", borderRadius: 12, boxShadow: "0 30px 60px rgba(0,0,0,.25)" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid var(--line)" }}>
@@ -3101,8 +3383,19 @@ const TestRequestPrintModal = ({ orderNo, request, onClose }) => {
         </div>
         <div style={{ padding: "28px 32px" }}>
           <div style={{ textAlign: "center", marginBottom: 20 }}>
+<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12.5, marginBottom: 18, padding: 12, background: "var(--surface-alt)", borderRadius: 8 }}>
+  <div>Ngôn ngữ phiếu: <strong>{request.meta?.isEnglish ? "Tiếng Anh" : "Tiếng Việt"}</strong></div>
+  <div>Lưu mẫu theo quy định: <strong>{request.meta?.requiresRetention ? "Có" : "Không"}</strong></div>
+  <div>Đồng ý nhà thầu phụ: <strong>{request.meta?.subcontractAgreed ? "Có" : "Không"}</strong></div>
+  <div>Địa điểm lấy mẫu: <strong>{request.diaDiemLayMau || "—"}</strong></div>
+  <div>Tổng chi phí: <strong>{request.meta?.totalFee || "—"}</strong></div>
+  <div>Đã ứng trước: <strong>{request.meta?.advancePaid || "—"}</strong></div>
+  <div>Người gửi mẫu: <strong>{request.meta?.requesterName || "—"}</strong> ({request.meta?.sentDate || "—"})</div>
+  <div>Người tiếp nhận: <strong>{request.meta?.receiverName || "—"}</strong> ({request.meta?.receivedDate || "—"})</div>
+</div>
+
             <div className="disp" style={{ fontSize: 18, fontWeight: 700, letterSpacing: ".04em" }}>PHIẾU YÊU CẦU KIỂM NGHIỆM</div>
-            <SpecimenTag>{YCKN_CODE[orderNo] || orderNo}</SpecimenTag>
+            {allYcknCode[orderNo] || orderNo}
           </div>
           <p style={{ fontSize: 13, margin: "0 0 18px" }}>Khách hàng: <strong>{request.kh}</strong> · Đơn hàng: <span className="mono">{orderNo}</span></p>
           {Object.entries(byGroup).map(([title, samples], gi) => (
@@ -3140,13 +3433,14 @@ const TestRequestPrintModal = ({ orderNo, request, onClose }) => {
 };
 
 
-const YeuCauThuNghiemPage = () => {
-  const orderNos = Object.keys(TEST_REQUESTS);
+const YeuCauThuNghiemPage = ({ allOrders, allTestRequests, allYcknCode }) => {
+  const orderNos = Object.keys(allTestRequests);
   const [orderNo, setOrderNo] = useState(orderNos[0]);
+
   const [notes, setNotes] = useState({});
   const [printing, setPrinting] = useState(false);
-  const request = TEST_REQUESTS[orderNo];
-  const order = ORDERS.find((o) => o.no === orderNo);
+  const request = allTestRequests[orderNo];
+  const order = allOrders.find((o) => o.no === orderNo);
 
   const setNote = (key, val) => setNotes((n) => ({ ...n, [key]: val }));
 
@@ -3158,12 +3452,12 @@ const YeuCauThuNghiemPage = () => {
           action={<button className="lims-btn lims-btn-primary" onClick={() => setPrinting(true)}><Printer size={14} /> Xuất Phiếu</button>}
         >
           <select className="lims-input" value={orderNo} onChange={(e) => setOrderNo(e.target.value)}>
-            {orderNos.map((no) => <option key={no} value={no}>{YCKN_CODE[no]} — {no} — {TEST_REQUESTS[no].kh}</option>)}
-          </select>
+  {orderNos.map((no) => <option key={no} value={no}>{allYcknCode[no]} — {no} — {allTestRequests[no].kh}</option>)}
+</select>
           {order && <span style={{ marginLeft: 12, fontSize: 12.5, color: "var(--ink-soft)" }}>{order.name}</span>}
         </SectionCard>
 
-        {Object.entries(flattenOrderSamples(orderNo).reduce((acc, s) => {
+        {Object.entries(flattenOrderSamples(orderNo, allTestRequests, allYcknCode).reduce((acc, s) => {
           (acc[s.groupTitle] = acc[s.groupTitle] || []).push(s);
           return acc;
         }, {})).map(([title, samples], gi) => (
@@ -3199,8 +3493,7 @@ const YeuCauThuNghiemPage = () => {
           </SectionCard>
         ))}
       </PageShell>
-      {printing && <TestRequestPrintModal orderNo={orderNo} request={request} onClose={() => setPrinting(false)} />}
-    </>
+{printing && <TestRequestPrintModal orderNo={orderNo} request={request} allTestRequests={allTestRequests} allYcknCode={allYcknCode} onClose={() => setPrinting(false)} />}    </>
   );
 };
 
@@ -3210,31 +3503,86 @@ const YeuCauThuNghiemPage = () => {
 // Toàn bộ danh sách người có thể được giao việc (KNV nội bộ + nhà thầu phụ)
 const ALL_ASSIGNEES = [...TECHNICIANS, ...SUBCONTRACTORS.map((s) => s.name)];
 
-const PhanCongPage = ({ role }) => {
-  const orderNos = Object.keys(TEST_REQUESTS);
+const PhanCongPage = ({ role, canEdit, allOrders, allTestRequests, allYcknCode, allWorkAssignments }) => {
+  const orderNos = Object.keys(allTestRequests);
   const [orderNo, setOrderNo] = useState(orderNos[0]);
-  const flat = useMemo(() => flattenOrderSamples(orderNo), [orderNo]);
+  const flat = useMemo(() => flattenOrderSamples(orderNo, allTestRequests, allYcknCode), [orderNo, allTestRequests, allYcknCode]);
   const [assignees, setAssignees] = useState({});
   const [notes, setNotes] = useState({});
-  const order = ORDERS.find((o) => o.no === orderNo);
-  const nguoiGiaoViec = ROLES.find((r) => r.key === "B").name; // Người giao việc = User B (Quản lý/Kinh doanh)
+  const order = allOrders.find((o) => o.no === orderNo);
+  const nguoiLapPhieu = ROLES.find((r) => r.key === "B").name; // người lập phiếu giao việc trong hệ thống
+  const [header, setHeader] = useState(
+  allWorkAssignments[orderNo] || { assignmentNo: `GV-${allYcknCode[orderNo] || orderNo}`, deliveryDate: "", delivererType: "INTERNAL", delivererName: TECHNICIANS[0], delivererContact: "", notes: "" }
+);
+React.useEffect(() => {
+  setHeader(allWorkAssignments[orderNo] || { assignmentNo: `GV-${allYcknCode[orderNo] || orderNo}`, deliveryDate: "", delivererType: "INTERNAL", delivererName: TECHNICIANS[0], delivererContact: "", notes: "" });
+}, [orderNo, allYcknCode]);
 
+const setHeaderField = (field, val) => setHeader((h) => ({ ...h, [field]: val }));
   const defaultAssignee = (s) => findIndicatorByName(s.chiTieu[0])?.assignee || TECHNICIANS[0];
   const assigneeFor = (s) => assignees[s.maSoMau] || defaultAssignee(s);
-  const setAssignee = (maSoMau, person) => setAssignees((a) => ({ ...a, [maSoMau]: person }));
+  const [assignDates, setAssignDates] = useState({});
+
+  const setAssignee = (maSoMau, person) => {
+    setAssignees((a) => ({ ...a, [maSoMau]: person }));
+    setAssignDates((d) => ({ ...d, [maSoMau]: new Date().toLocaleDateString("vi-VN") }));
+  };
   const setNote = (maSoMau, val) => setNotes((n) => ({ ...n, [maSoMau]: val }));
 
   return (
     <>
       <PageHeader title="Giao việc" subtitle="Giao từng mẫu con cho kiểm nghiệm viên — mặc định lấy theo Danh mục Chỉ tiêu, có thể đổi người" />
       <PageShell>
-        <SectionCard title="Chọn hợp đồng / Phiếu YCKN" icon={ClipboardList}>
-          <select className="lims-input" value={orderNo} onChange={(e) => setOrderNo(e.target.value)}>
-            {orderNos.map((no) => <option key={no} value={no}>{YCKN_CODE[no]} — {no} — {TEST_REQUESTS[no].kh}</option>)}
-          </select>
-          {order && <span style={{ marginLeft: 12, fontSize: 12.5, color: "var(--ink-soft)" }}>{order.name}</span>}
-          <span style={{ marginLeft: 12, fontSize: 12, color: "var(--ink-faint)" }}>Người giao việc: <strong style={{ color: "var(--ink)" }}>{nguoiGiaoViec}</strong></span>
-        </SectionCard>
+<SectionCard title="Chọn hợp đồng / Phiếu YCKN" icon={ClipboardList}>
+  <select className="lims-input" value={orderNo} onChange={(e) => setOrderNo(e.target.value)}>
+    {orderNos.map((no) => <option key={no} value={no}>{allYcknCode[no]} — {no} — {allTestRequests[no].kh}</option>)}
+  </select>
+  {order && <span style={{ marginLeft: 12, fontSize: 12.5, color: "var(--ink-soft)" }}>{order.name}</span>}
+  <span style={{ marginLeft: 12, fontSize: 12, color: "var(--ink-faint)" }}>Người lập phiếu: <strong style={{ color: "var(--ink)" }}>{nguoiLapPhieu}</strong></span>
+</SectionCard>
+
+<SectionCard title="Thông tin chung Phiếu giao việc" icon={PackageCheck}>
+  <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-end" }}>
+    <div>
+      <label style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>Số phiếu giao việc</label>
+      <input className="lims-input" style={{ width: 160 }} value={header.assignmentNo} onChange={(e) => setHeaderField("assignmentNo", e.target.value)} />
+    </div>
+    <div>
+      <label style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>Ngày giao mẫu phân tích</label>
+      <input className="lims-input" style={{ width: 150 }} placeholder="dd/mm/yyyy" value={header.deliveryDate} onChange={(e) => setHeaderField("deliveryDate", e.target.value)} />
+    </div>
+    <div>
+      <label style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>Người giao mẫu</label>
+      <select className="lims-input" style={{ width: 170 }} value={header.delivererType} onChange={(e) => setHeaderField("delivererType", e.target.value)}>
+        <option value="INTERNAL">Người dùng nội bộ</option>
+        <option value="EXTERNAL">Đối tác ngoài hệ thống</option>
+      </select>
+    </div>
+    {header.delivererType === "INTERNAL" ? (
+      <div>
+        <label style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>Chọn người</label>
+        <select className="lims-input" style={{ width: 170 }} value={header.delivererName} onChange={(e) => setHeaderField("delivererName", e.target.value)}>
+          {[...TECHNICIANS, "Acc Quản lý", "Acc Trưởng phòng"].map((p) => <option key={p}>{p}</option>)}
+        </select>
+      </div>
+    ) : (
+      <>
+        <div>
+          <label style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>Tên người/đơn vị giao</label>
+          <input className="lims-input" style={{ width: 200 }} placeholder="VD: Anh Tuấn - Lái xe KH" value={header.delivererName} onChange={(e) => setHeaderField("delivererName", e.target.value)} />
+        </div>
+        <div>
+          <label style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>Liên hệ</label>
+          <input className="lims-input" style={{ width: 150 }} placeholder="SĐT" value={header.delivererContact} onChange={(e) => setHeaderField("delivererContact", e.target.value)} />
+        </div>
+      </>
+    )}
+    <div style={{ flex: "1 1 220px" }}>
+      <label style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 4 }}>Ghi chú chung</label>
+      <input className="lims-input" style={{ width: "100%" }} value={header.notes} onChange={(e) => setHeaderField("notes", e.target.value)} />
+    </div>
+  </div>
+</SectionCard>
 
         <SectionCard title="Danh sách mẫu con cần giao việc" icon={Split} style={{ padding: 0 }}>
           <div className="lims-scroll" style={{ overflowX: "auto" }}>
@@ -3252,7 +3600,7 @@ const PhanCongPage = ({ role }) => {
                   const isDefault = current === defaultAssignee(s);
                   return (
                     <tr key={s.maSoMau}>
-                      <td><SpecimenTag>{YCKN_CODE[orderNo]}</SpecimenTag></td>
+                      <td><SpecimenTag>{allYcknCode[orderNo]}</SpecimenTag></td>
                       <td style={{ fontWeight: 600 }}>{s.ten}</td>
                       <td>
                         <div className="mono">{s.luong}</div>
@@ -3265,7 +3613,13 @@ const PhanCongPage = ({ role }) => {
                         </div>
                       </td>
                       <td>
-                        <select className="lims-input" style={{ fontSize: 12, padding: "4px 8px" }} value={current} onChange={(e) => setAssignee(s.maSoMau, e.target.value)}>
+                        <select
+                          className="lims-input"
+                          style={{ fontSize: 12, padding: "4px 8px" }}
+                          value={current}
+                          disabled={!canEdit}
+                          onChange={(e) => setAssignee(s.maSoMau, e.target.value)}
+                        >
                           {ALL_ASSIGNEES.map((p) => <option key={p}>{p}</option>)}
                         </select>
                         <div style={{ fontSize: 10.5, color: "var(--ink-faint)", marginTop: 3 }}>
@@ -3274,8 +3628,7 @@ const PhanCongPage = ({ role }) => {
                         </div>
                       </td>
                       <td><input className="lims-input" style={{ width: 140, fontSize: 12 }} placeholder="Ghi chú" value={notes[s.maSoMau] || ""} onChange={(e) => setNote(s.maSoMau, e.target.value)} /></td>
-                      <td style={{ fontSize: 12, color: "var(--ink-soft)" }}>{nguoiGiaoViec}</td>
-                    </tr>
+<td style={{ fontSize: 12, color: "var(--ink-soft)" }}>{nguoiLapPhieu}</td>                    </tr>
                   );
                 })}
                 {flat.length === 0 && <tr><td colSpan={8} style={{ padding: 16, color: "var(--ink-faint)" }}>Hợp đồng này chưa có yêu cầu thử nghiệm.</td></tr>}
@@ -3324,12 +3677,12 @@ const ColumnToggle = ({ visible, setVisible }) => {
   );
 };
 
-const MeThuNghiemPage = () => {
-  const groupedByPhieu = Object.keys(YCKN_CODE).map((orderNo) => ({
+const MeThuNghiemPage = ({ batches, allYcknCode, allTestRequests, allWorkAssignments }) => {
+  const groupedByPhieu = Object.keys(allTestRequests).map((orderNo) => ({
     orderNo,
-    phieu: YCKN_CODE[orderNo],
-    kh: TEST_REQUESTS[orderNo]?.kh,
-    items: BATCHES.filter((b) => b.order === orderNo),
+    phieu: allYcknCode[orderNo],
+    kh: allTestRequests[orderNo]?.kh,
+    items: batches.filter((b) => b.order === orderNo),
   }));
   const [expanded, setExpanded] = useState(groupedByPhieu[0]?.orderNo || null);
   const [colVisible, setColVisible] = useState(Object.fromEntries(ALL_COLUMNS.map((c) => [c.key, true])));
@@ -3344,21 +3697,29 @@ const MeThuNghiemPage = () => {
             return (
               <div key={g.orderNo} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" }}>
                 <div
-                  onClick={() => setExpanded(isOpen ? null : g.orderNo)}
-                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", cursor: "pointer", background: isOpen ? "var(--surface-alt)" : "var(--surface)" }}
-                >
-                  {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                  <SpecimenTag>{g.phieu}</SpecimenTag>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{g.kh}</span>
-                  <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-faint)" }}>{g.orderNo}</span>
-                  <span className="badge" style={{ background: "var(--surface-alt)", color: "var(--ink-soft)", marginLeft: "auto" }}>{g.items.length} chỉ tiêu</span>
-                </div>
+  onClick={() => setExpanded(isOpen ? null : g.orderNo)}
+  style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", cursor: "pointer", background: isOpen ? "var(--surface-alt)" : "var(--surface)", flexWrap: "wrap" }}
+>
+  {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+  <SpecimenTag>{g.phieu}</SpecimenTag>
+  <span style={{ fontSize: 13, fontWeight: 600 }}>{g.kh}</span>
+  <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-faint)" }}>{g.orderNo}</span>
+  {(() => {
+    const a = allWorkAssignments[g.orderNo];
+    return a ? (
+      <span style={{ fontSize: 11.5, color: "var(--ink-soft)", display: "flex", alignItems: "center", gap: 5 }}>
+        <PackageCheck size={12} color="var(--primary)" /> {a.assignmentNo} · Giao {a.deliveryDate} · {delivererLabel(a)}
+      </span>
+    ) : null;
+  })()}
+  <span className="badge" style={{ background: "var(--surface-alt)", color: "var(--ink-soft)", marginLeft: "auto" }}>{g.items.length} chỉ tiêu</span>
+</div>
                 {isOpen && (
                   <div className="lims-scroll" style={{ overflowX: "auto", borderTop: "1px solid var(--line)" }}>
                     <table className="lims-table">
                       <thead>
                         <tr>
-                          <th>Mã mẫu con</th><th>Chỉ tiêu</th><th>Phương pháp</th><th>Kiểm Nghiệm viên</th><th>Trạng thái</th>
+                          <th>Mã mẫu con</th><th>Số PGV</th><th>Chỉ tiêu</th><th>Phương pháp</th><th>Kiểm Nghiệm viên</th><th>Trạng thái</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3367,6 +3728,7 @@ const MeThuNghiemPage = () => {
                           return (
                             <tr key={i}>
                               <td><SpecimenTag>{b.kyHieu || b.sample}</SpecimenTag></td>
+                              <td className="mono" style={{ color: "var(--ink-faint)", fontSize: 11.5 }}>{b.assignmentNo || "—"}</td>
                               <td style={{ fontWeight: 600 }}>{b.indicator}</td>
                               <td style={{ color: "var(--ink-soft)" }}>{b.method}</td>
                               <td>{b.tech}</td>
@@ -3403,7 +3765,7 @@ const MeThuNghiemPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {BATCHES.map((b, i) => {
+                {batches.map((b, i) => {
                   const st = BATCH_STATUS[b.status];
                   return (
                     <tr key={i}>
@@ -3759,6 +4121,16 @@ const KetQuaThuNghiemPage = ({ batches }) => {
             {samples.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           {order && <span style={{ marginLeft: 12, fontSize: 12.5, color: "var(--ink-soft)" }}>{order.name} — {order.kh}</span>}
+          {(() => {
+            const a = getAssignmentByOrder(rows[0]?.order);
+            return a ? (
+              <div style={{ marginTop: 10, fontSize: 12, color: "var(--ink-soft)", display: "flex", flexWrap: "wrap", gap: 14 }}>
+                <span><strong style={{ color: "var(--ink)" }}>Số phiếu giao việc:</strong> {a.assignmentNo}</span>
+                <span><strong style={{ color: "var(--ink)" }}>Ngày giao mẫu:</strong> {a.deliveryDate}</span>
+                <span><strong style={{ color: "var(--ink)" }}>Người giao mẫu:</strong> {delivererLabel(a)}</span>
+              </div>
+            ) : null;
+          })()}
         </SectionCard>
 
         <SectionCard title={`Kết quả — mẫu ${maSoMau}`} icon={FlaskConical} style={{ padding: 0 }}>
@@ -3782,9 +4154,15 @@ const KetQuaThuNghiemPage = ({ batches }) => {
                 })}
                 {rows.length === 0 && <tr><td colSpan={7} style={{ padding: 16, color: "var(--ink-faint)" }}>Chưa có kết quả cho mẫu này.</td></tr>}
               </tbody>
-            </table>
-          </div>
-        </SectionCard>
+              </table>
+              {rows.length > 0 && rows.every((b) => b.status === "APPROVED_COMPLETED") && (
+                <div style={{ marginTop: 10, fontSize: 12.5, padding: "0 16px 12px" }}>
+                  <strong style={{ color: "var(--ink)" }}>Mã phiếu kết quả (CoA):</strong>{" "}
+                  <SpecimenTag>{genFinalReportCode(rows[0].order)}</SpecimenTag>
+                </div>
+              )}
+              </div>
+</SectionCard>
       </PageShell>
     </>
   );
@@ -3982,7 +4360,78 @@ const HopDongPage = () => (
     </PageShell>
   </>
 );
+const TkNenMauPage = ({ batches }) => {
+  const matrixColors = { "Nước mặt": "#3E6EA6", "Nước ngầm": "#0F6E5C", "Nước sạch": "#6957A8", "Nước thải": "#BD432E", "Không khí xung quanh": "#B8792A", "Khí thải": "#8A968D", "Đất": "#57655D" };
 
+  // Tổng hợp số lượng chỉ tiêu được phân tích / số lượng mẫu (theo toàn bộ batches hiện có)
+  const uniqueSamples = new Set(batches.map((b) => b.kyHieu || b.sample));
+  const totalSamples = uniqueSamples.size;
+  const totalIndicators = batches.length;
+  const ratio = totalSamples ? (totalIndicators / totalSamples).toFixed(2) : "0";
+
+  return (
+    <>
+      <PageHeader title="Thống kê theo Nền mẫu" subtitle="Số mẫu theo từng nền mẫu theo tháng và tỷ lệ chỉ tiêu/mẫu" />
+      <PageShell>
+        <StatFilters />
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+          <div style={{ background: "var(--primary-soft)", borderRadius: 10, padding: 16 }}>
+            <div style={{ fontSize: 26, fontWeight: 700, color: "var(--primary-dark)" }}>{totalSamples}</div>
+            <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 4 }}>Tổng số mẫu</div>
+          </div>
+          <div style={{ background: "var(--blue-soft)", borderRadius: 10, padding: 16 }}>
+            <div style={{ fontSize: 26, fontWeight: 700, color: "var(--blue)" }}>{totalIndicators}</div>
+            <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 4 }}>Tổng số chỉ tiêu đã phân tích</div>
+          </div>
+          <div style={{ background: "var(--amber-soft)", borderRadius: 10, padding: 16 }}>
+            <div style={{ fontSize: 26, fontWeight: 700, color: "var(--amber)" }}>{ratio}</div>
+            <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 4 }}>Chỉ tiêu / mẫu (trung bình)</div>
+          </div>
+        </div>
+
+        <SectionCard title="Số mẫu theo nền mẫu — theo tháng" icon={Layers}>
+          <div style={{ width: "100%", height: 300 }}>
+            <ResponsiveContainer>
+              <ComposedChart data={SAMPLES_BY_MATRIX_MONTH}>
+                <CartesianGrid stroke="var(--line)" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#57655D" }} axisLine={{ stroke: "#DCE2D8" }} tickLine={false} />
+                <YAxis tick={{ fontSize: 12, fill: "#57655D" }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #DCE2D8" }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {Object.keys(matrixColors).map((k) => (
+                  <Bar key={k} dataKey={k} stackId="a" fill={matrixColors[k]} />
+                ))}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Bảng chi tiết theo tháng" icon={FileText} style={{ padding: 0 }}>
+          <div className="lims-scroll" style={{ overflowX: "auto" }}>
+            <table className="lims-table">
+              <thead>
+                <tr><th>Tháng</th>{Object.keys(matrixColors).map((k) => <th key={k}>{k}</th>)}<th>Tổng</th></tr>
+              </thead>
+              <tbody>
+                {SAMPLES_BY_MATRIX_MONTH.map((r) => {
+                  const total = Object.keys(matrixColors).reduce((s, k) => s + (r[k] || 0), 0);
+                  return (
+                    <tr key={r.month}>
+                      <td className="mono">{r.month}/2026</td>
+                      {Object.keys(matrixColors).map((k) => <td key={k} className="mono">{r[k] || 0}</td>)}
+                      <td className="mono" style={{ fontWeight: 700 }}>{total}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+      </PageShell>
+    </>
+  );
+};
 /* ============================================================
    7. CẤU HÌNH & HỆ THỐNG
    ============================================================ */
@@ -4004,6 +4453,7 @@ const DanhMucAPage = () => (
                 <th>Ngưỡng</th>
                 <th>Thực hiện bởi</th>
                 <th>Đơn giá</th>
+                <th>Giá nhà thầu phụ</th>
                 <th></th>
               </tr>
             </thead>
@@ -4028,6 +4478,11 @@ const DanhMucAPage = () => (
                     )}
                   </td>
                   <td className="mono">{i.price.toLocaleString("vi-VN")} đ</td>
+                    <td className="mono" style={{ color: "var(--amber)" }}>
+                      {i.isSubcontract && i.subPrices?.[i.assignee]
+                        ? `${i.subPrices[i.assignee].toLocaleString("vi-VN")} đ`
+                        : "—"}
+                    </td>
                   <td><RowActions /></td>
                 </tr>
               ))}
@@ -4038,6 +4493,78 @@ const DanhMucAPage = () => (
     </PageShell>
   </>
 );
+
+const LoaiMauPage = ({ canEdit }) => {
+  const [types, setTypes] = useState(SAMPLE_TYPE_DEFS);
+  const [modal, setModal] = useState(null); // {mode:'add'|'edit', data}
+
+  const save = (form) => {
+    setTypes((ts) => modal.mode === "edit"
+      ? ts.map((t) => (t.code === modal.data.code ? form : t))
+      : [...ts, form]);
+    setModal(null);
+  };
+  const remove = (code) => setTypes((ts) => ts.filter((t) => t.code !== code));
+
+  return (
+    <>
+      <PageHeader title="Quản lý Loại mẫu" subtitle="Danh mục nền mẫu dùng chung cho Báo giá, Phiếu YCKN, Danh mục chỉ tiêu" />
+      <PageShell>
+        <SectionCard title="Danh sách loại mẫu" icon={FlaskConical} style={{ padding: 0 }}>
+          <Toolbar search="" setSearch={() => {}} placeholder="Tìm loại mẫu..."
+            onAdd={canEdit ? () => setModal({ mode: "add" }) : undefined} addLabel="Thêm loại mẫu" />
+          <div className="lims-scroll" style={{ overflowX: "auto" }}>
+            <table className="lims-table">
+              <thead><tr><th>Mã viết tắt</th><th>Tên loại mẫu</th><th></th></tr></thead>
+              <tbody>
+                {types.map((t) => (
+                  <tr key={t.code}>
+                    <td><SpecimenTag>{t.code}</SpecimenTag></td>
+                    <td style={{ fontWeight: 600 }}>{t.name}</td>
+                    <td>
+                      {canEdit && (
+                        <RowActions
+                          onEdit={() => setModal({ mode: "edit", data: t })}
+                          onDelete={() => remove(t.code)}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+      </PageShell>
+
+      {modal && (
+        <Modal title={modal.mode === "edit" ? "Sửa loại mẫu" : "Thêm loại mẫu"} onClose={() => setModal(null)} width={360}>
+          <LoaiMauForm initial={modal.data} onSave={save} onCancel={() => setModal(null)} />
+        </Modal>
+      )}
+    </>
+  );
+};
+
+const LoaiMauForm = ({ initial, onSave, onCancel }) => {
+  const [form, setForm] = useState(initial || { code: "", name: "" });
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div>
+        <label style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-soft)" }}>Mã viết tắt (VD: NT, KK)</label>
+        <input className="lims-input" style={{ width: "100%", marginTop: 4 }} value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} />
+      </div>
+      <div>
+        <label style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-soft)" }}>Tên loại mẫu</label>
+        <input className="lims-input" style={{ width: "100%", marginTop: 4 }} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+        <button className="lims-btn lims-btn-ghost" onClick={onCancel}>Hủy</button>
+        <button className="lims-btn lims-btn-primary" disabled={!form.code || !form.name} onClick={() => onSave(form)}>Lưu</button>
+      </div>
+    </div>
+  );
+};
 
 const NhaThauPhuPage = () => (
   <>
@@ -4086,67 +4613,129 @@ const NhaThauPhuPage = () => (
   </>
 );
 
-const ThietBiPage = () => (
-  <>
-    <PageHeader title="Thiết bị & Hiệu chuẩn" subtitle="Theo dõi lịch hiệu chuẩn và bảo trì thiết bị phòng Lab" />
-    <PageShell>
-      <SectionCard title="Danh sách thiết bị" icon={Wrench} style={{ padding: 0 }}>
-        <div className="lims-scroll" style={{ overflowX: "auto" }}>
-          <table className="lims-table">
-            <thead><tr><th>Thiết bị</th><th>Hạn hiệu chuẩn</th><th>Trạng thái</th></tr></thead>
-            <tbody>
-              {EQUIPMENT_OVERDUE.map((e) => (
-                <tr key={e.name}>
-                  <td style={{ fontWeight: 600 }}>{e.name}</td>
-                  <td className="mono">{e.due}</td>
-                  <td><span className="badge" style={{ background: "var(--red-soft)", color: "var(--red)" }}>Quá hạn {e.days} ngày</span></td>
-                </tr>
-              ))}
-              {EQUIPMENT_LIST.slice(2).map((name) => (
-                <tr key={name}>
-                  <td style={{ fontWeight: 600 }}>{name}</td>
-                  <td className="mono">20/09/2026</td>
-                  <td><span className="badge" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}>Còn hạn</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
-    </PageShell>
-  </>
-);
 
-const NguoiDungPage = () => (
-  <>
-    <PageHeader title="Người dùng & Phòng ban" subtitle="Tài khoản nhân viên, vai trò truy cập và cơ cấu chi nhánh" />
-    <PageShell>
-      <SectionCard title="Tài khoản nhân viên" icon={ShieldCheck} style={{ padding: 0 }}>
-        <div className="lims-scroll" style={{ overflowX: "auto" }}>
-          <table className="lims-table">
-            <thead><tr><th>Nhân viên</th><th>Vai trò</th><th>Trạng thái</th></tr></thead>
-            <tbody>
-              {[
-                ["Acc Quản lý", "Quản lý — mọi thứ trừ Duyệt cuối"],
-                ["Acc KNV 1", "Kiểm Nghiệm viên"],
-                ["Acc KNV 2", "Kiểm Nghiệm viên"],
-                ["Acc KNV 3", "Kiểm Nghiệm viên"],
-                ["Acc Trưởng phòng", "Trưởng phòng Lab — toàn quyền + Duyệt"],
-              ].map(([n, r]) => (
-                <tr key={n}><td style={{ fontWeight: 600 }}>{n}</td><td>{r}</td><td><span className="badge" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}>Đang hoạt động</span></td></tr>
-              ))}
-            </tbody>
-          </table>
+const emptyUserForm = { name: "", role: "A", status: "Đang hoạt động" };
+
+const UserFormModal = ({ initial, onClose, onSave }) => {
+  const [form, setForm] = useState(initial || emptyUserForm);
+  const isEdit = !!initial;
+  return (
+    <Modal title={isEdit ? "Chỉnh sửa tài khoản" : "Thêm tài khoản mới"} onClose={onClose} width={420}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div>
+          <label style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-soft)" }}>Tên nhân viên</label>
+          <input className="lims-input" style={{ width: "100%", marginTop: 4 }}
+            value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
         </div>
-      </SectionCard>
-      <SectionCard title="Chi nhánh / Phòng ban" icon={Building2}>
-        <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
-          Chi nhánh Hà Nội (Trụ sở chính) · Chi nhánh Hòa Bình · Chi nhánh Long An
+        <div>
+          <label style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-soft)" }}>Vai trò</label>
+          <select className="lims-input" style={{ width: "100%", marginTop: 4 }}
+            value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
+            {ROLES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+          </select>
         </div>
-      </SectionCard>
-    </PageShell>
-  </>
-);
+        <div>
+          <label style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-soft)" }}>Trạng thái</label>
+          <select className="lims-input" style={{ width: "100%", marginTop: 4 }}
+            value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
+            <option>Đang hoạt động</option>
+            <option>Tạm khóa</option>
+          </select>
+        </div>
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
+        <button className="lims-btn lims-btn-ghost" onClick={onClose}>Hủy</button>
+        <button className="lims-btn lims-btn-primary" disabled={!form.name.trim()} onClick={() => onSave(form)}>
+          {isEdit ? "Lưu thay đổi" : "Thêm tài khoản"}
+        </button>
+      </div>
+    </Modal>
+  );
+};
+
+const NguoiDungPage = ({ role }) => {
+  const canEdit = role === "C";
+  const [users, setUsers] = useState([
+    { name: "Acc Quản lý", role: "B", status: "Đang hoạt động" },
+    { name: "Acc KNV 1", role: "A", status: "Đang hoạt động" },
+    { name: "Acc KNV 2", role: "A", status: "Đang hoạt động" },
+    { name: "Acc KNV 3", role: "A", status: "Đang hoạt động" },
+    { name: "Acc Trưởng phòng", role: "C", status: "Đang hoạt động" },
+  ]);
+  const [modal, setModal] = useState(null); // {mode:'add'|'edit', data}
+
+  const roleLabel = (key) => ROLES.find((r) => r.key === key)?.label || key;
+
+  const saveUser = (form) => {
+    setUsers((us) =>
+      modal?.mode === "edit"
+        ? us.map((u) => (u.name === modal.data.name ? form : u))
+        : [...us, form]
+    );
+    setModal(null);
+  };
+  const removeUser = (name) => setUsers((us) => us.filter((u) => u.name !== name));
+
+  return (
+    <>
+      <PageHeader title="Người dùng & Phòng ban" subtitle="Tài khoản nhân viên, vai trò truy cập và cơ cấu chi nhánh" />
+      <PageShell>
+        <SectionCard title="Tài khoản nhân viên" icon={ShieldCheck} style={{ padding: 0 }}
+          action={canEdit && (
+            <button className="lims-btn lims-btn-primary" onClick={() => setModal({ mode: "add" })}>
+              <Plus size={14} /> Thêm tài khoản
+            </button>
+          )}
+        >
+          <div className="lims-scroll" style={{ overflowX: "auto" }}>
+            <table className="lims-table">
+              <thead>
+                <tr><th>Nhân viên</th><th>Vai trò</th><th>Trạng thái</th>{canEdit && <th style={{ width: 90, textAlign: "right" }}>Thao tác</th>}</tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.name}>
+                    <td style={{ fontWeight: 600 }}>{u.name}</td>
+                    <td>{roleLabel(u.role)}</td>
+                    <td>
+                      <span className="badge" style={{
+                        background: u.status === "Đang hoạt động" ? "var(--primary-soft)" : "var(--red-soft)",
+                        color: u.status === "Đang hoạt động" ? "var(--primary-dark)" : "var(--red)",
+                      }}>
+                        {u.status}
+                      </span>
+                    </td>
+                    {canEdit && (
+                      <td style={{ textAlign: "right" }}>
+                        <RowActions
+                          onEdit={() => setModal({ mode: "edit", data: u })}
+                          onDelete={() => removeUser(u.name)}
+                        />
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+        <SectionCard title="Chi nhánh / Phòng ban" icon={Building2}>
+          <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+            Chi nhánh Hà Nội (Trụ sở chính) · Chi nhánh Hòa Bình · Chi nhánh Long An
+          </div>
+        </SectionCard>
+      </PageShell>
+
+      {modal && (
+        <UserFormModal
+          initial={modal.mode === "edit" ? modal.data : null}
+          onClose={() => setModal(null)}
+          onSave={saveUser}
+        />
+      )}
+    </>
+  );
+};
 
 /* ============================================================
    APP ROOT
@@ -4155,8 +4744,16 @@ export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [page, setPage] = useState("banLamViec");
   const [role, setRole] = useState("B");
-  // BATCHES nâng lên state gốc, dùng chung xuyên suốt luồng Nhập KQ → Tổng hợp → Duyệt
   const [batches, setBatches] = useState(BATCHES);
+  const [manualOrders, setManualOrders] = useState([]);
+  const [manualRequests, setManualRequests] = useState({});
+  const [manualYckn, setManualYckn] = useState({});
+  const [manualAssignments, setManualAssignments] = useState({});
+
+  const allOrders = [...ORDERS, ...manualOrders];
+  const allTestRequests = { ...TEST_REQUESTS, ...manualRequests };
+  const allYcknCode = { ...YCKN_CODE, ...manualYckn };
+  const allWorkAssignments = { ...WORK_ASSIGNMENTS, ...manualAssignments };
 
   if (!loggedIn) return <LoginScreen onLogin={(r) => { setRole(r); setLoggedIn(true); }} />;
 
@@ -4165,24 +4762,33 @@ export default function App() {
   const pages = {
     banLamViec: <BanLamViecPage setPage={setPage} />,
     tongQuanLab: <TongQuanLabPage />,
-    khachHang: <KhachHangPage role={role} />,
-    baoGia: <BaoGiaPage role={role} setPage={setPage} />,
+    khachHang: <KhachHangPage role={role} canEdit={canEditData(role, "khachHang")} />,
+baoGia: <BaoGiaPage role={role} setPage={setPage} canEdit={canEditData(role, "baoGia")} />,
     hopDong: <HopDongPage />,
-    TaoPhieuYCKN: <TaoPhieuYCKNPage role={role} setPage={setPage} />,
-    yeuCauTN: <YeuCauThuNghiemPage />,
-    phanCong: <PhanCongPage role={role} />,
-    meThuNghiem: <MeThuNghiemPage />,
-    nhapKQ: <NhapKetQuaPage role={role} batches={batches} setBatches={setBatches} />,
+    TaoPhieuYCKN: (
+  <TaoPhieuYCKNPage
+    role={role} setPage={setPage} canEdit={canEditData(role, "TaoPhieuYCKN")}
+        manualOrders={manualOrders} setManualOrders={setManualOrders}
+        manualRequests={manualRequests} setManualRequests={setManualRequests}
+        manualYckn={manualYckn} setManualYckn={setManualYckn}
+        manualAssignments={manualAssignments} setManualAssignments={setManualAssignments}
+        allOrders={allOrders} allTestRequests={allTestRequests} allYcknCode={allYcknCode}
+      />
+    ),
+    yeuCauTN: <YeuCauThuNghiemPage allOrders={allOrders} allTestRequests={allTestRequests} allYcknCode={allYcknCode} />,
+    phanCong: <PhanCongPage role={role} canEdit={canEditData(role, "phanCong")}  allOrders={allOrders} allTestRequests={allTestRequests} allYcknCode={allYcknCode} allWorkAssignments={allWorkAssignments} />,
+meThuNghiem: <MeThuNghiemPage batches={batches} allYcknCode={allYcknCode} allTestRequests={allTestRequests} allWorkAssignments={allWorkAssignments} />,    nhapKQ: <NhapKetQuaPage role={role} batches={batches} setBatches={setBatches} />,
     tongHopPhieu: <TongHopPhieuPage batches={batches} setBatches={setBatches} />,
     duyetPhieu: <DuyetPhieuPage role={role} batches={batches} setBatches={setBatches} />,
-    ketQuaThuNghiem: <KetQuaThuNghiemPage batches={batches} />,
+    ketQuaThuNghiem: <KetQuaThuNghiemPage batches={batches} allWorkAssignments={allWorkAssignments} />,
     tkKinhDoanh: <TkKinhDoanhPage />,
     tkNangSuat: <TkNangSuatPage />,
     tkKyThuat: <TkKyThuatPage batches={batches} />,
+    tkNenMau: <TkNenMauPage batches={batches} />,
     danhMucA: <DanhMucAPage />,
+    loaiMau: <LoaiMauPage canEdit={canEditData(role, "loaiMau")} />,
     nhaThauPhu: <NhaThauPhuPage />,
-    thietBi: <ThietBiPage />,
-    nguoiDung: <NguoiDungPage />,
+    nguoiDung: <NguoiDungPage role={role} />,
   };
 
   return (
